@@ -4,6 +4,7 @@ export function parseRows(rows){
   const mesures = []
   for (const r of rows){
     const num = extract(r, ['num','NUM','Num'])
+    const numUd = extract(r, ['numUd','num_ud','NUMUD','numUD','num_ud'])
     const PbRaw = extract(r, ['Pb','pb','PB'])
     const precisionRaw = extract(r, ['précision','precision','Prec','PRÉCISION','precision'])
     const date = extract(r, ['date','Date']) || ''
@@ -11,7 +12,7 @@ export function parseRows(rows){
     const Pb = parseNumber(PbRaw)
     const precision = precisionRaw ? String(precisionRaw) : ''
     const classe = classify(Pb, precision)
-    mesures.push({ num: num ? String(num) : '', Pb: PbRaw, Pb_value: Pb, precision, date, livetime, classe, pieceId: null })
+    mesures.push({ num: num ? String(num) : '', numUd: numUd ? String(numUd) : '', Pb: PbRaw ? String(PbRaw) : '', Pb_value: Pb, precision, date, livetime, classe, pieceId: null })
   }
   return mesures
 }
@@ -41,11 +42,12 @@ function parseNumber(v){
 // - 5 <= Pb < 50 -> Classe 2
 // - >=50 -> Classe 3
 export function classify(PbValue, precision){
+  // Simplified classification for V5.1
+  // Pb < 1 => Classe 0
+  // Pb >= 1 => Classe 1
   if (PbValue === null || PbValue === undefined) return 'Classe 0'
   if (PbValue < 1) return 'Classe 0'
-  if (PbValue < 5) return 'Classe 1'
-  if (PbValue < 50) return 'Classe 2'
-  return 'Classe 3'
+  return 'Classe 1'
 }
 
 export default { parseRows, classify }

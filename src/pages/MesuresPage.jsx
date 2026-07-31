@@ -48,12 +48,17 @@ export default function MesuresPage(){
     load()
   }
 
+  const assignSingle = async (id, pieceId) =>{
+    await updateMesure(id, { pieceId: pieceId ? Number(pieceId) : null })
+    load()
+  }
+
   return (
     <div>
       <h2>Mesures — {chantier?.name}</h2>
 
       <div style={{marginBottom:12}}>
-        <label>Pièce pour affectation: </label>
+        <label>Pièce pour affectation (multi): </label>
         <select value={selectedPiece} onChange={e=>setSelectedPiece(e.target.value)}>
           <option value="">-- Choisir pièce --</option>
           {pieces.map(p=> <option key={p.id} value={p.id}>{p.name} (UD:{p.numUd||'-'})</option>)}
@@ -67,17 +72,25 @@ export default function MesuresPage(){
 
       <table border={1} cellPadding={6} style={{width:'100%'}}>
         <thead>
-          <tr><th></th><th>N° mesure</th><th>Pb</th><th>Précision</th><th>Classe</th><th>Pièce</th></tr>
+          <tr><th></th><th>N° Mesure</th><th>Pièce</th><th>Pb</th><th>Précision</th><th>Date</th><th>Livetime</th><th>Classe</th><th>Action</th></tr>
         </thead>
         <tbody>
           {mesures.map(m=> (
             <tr key={m.id}>
               <td><input type="checkbox" checked={!!selected[m.id]} onChange={()=>toggle(m.id)} /></td>
               <td>{m.num}</td>
+              <td>{pieces.find(p=> p.id === m.pieceId)?.name || '-'}</td>
               <td>{m.Pb}</td>
               <td>{m.precision}</td>
+              <td>{m.date}</td>
+              <td>{m.livetime}</td>
               <td>{m.classe || classify(m.Pb_value, m.precision)}</td>
-              <td>{m.pieceId || '-'}</td>
+              <td>
+                <select defaultValue={m.pieceId || ''} onChange={(e)=>assignSingle(m.id, e.target.value)}>
+                  <option value="">-- Aucun --</option>
+                  {pieces.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </td>
             </tr>
           ))}
         </tbody>
