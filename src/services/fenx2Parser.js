@@ -29,8 +29,7 @@ function extract(obj, keys){
 
 function parseNumber(v){
   if (v === undefined || v === null) return null
-  const s = String(v).replace(',', '.').replace(/[^
-0-9.\-]/g,'').trim()
+  const s = String(v).replace(',', '.').replace(/[^0-9.-]/g, '').trim()
   const n = parseFloat(s)
   return isNaN(n) ? null : n
 }
