@@ -10,6 +10,9 @@ export const getChantier = async (id) => db.chantiers.get(Number(id))
 
 export const addPiece = async (p) => db.pieces.add(p)
 export const getPiecesByChantier = async (chantierId) => db.pieces.where('chantierId').equals(Number(chantierId)).toArray()
+export const getPiece = async (id) => db.pieces.get(Number(id))
+export const updatePiece = async (id, changes) => db.pieces.update(Number(id), changes)
+export const deletePiece = async (id) => db.pieces.delete(Number(id))
 
 export const addMesures = async (mesArray) => db.mesures.bulkAdd(mesArray)
 export const getMesuresByChantier = async (chantierId) => db.mesures.where('chantierId').equals(Number(chantierId)).toArray()

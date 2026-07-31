@@ -22,7 +22,7 @@ export default function DashboardPage(){
       </div>
       <ul>
         {chantiers.map(c=> (
-          <li key={c.id}><Link to={`/chantier/${c.id}`}>{c.name || `Chantier ${c.id}`}</Link></li>
+          <li key={c.id}><Link to={`/pieces/${c.id}`}>{c.name || `Chantier ${c.id}`}</Link> — <Link to={`/mesures/${c.id}`}>Mesures</Link></li>
         ))}
       </ul>
     </div>
