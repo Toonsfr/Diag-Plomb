@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { getChantiers, getChantier, addMesures, getPiecesByChantier, addPiece } from '../services/storage'
+import { getChantiers, addMesures, getPiecesByChantier, addPiece } from '../services/storage'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { parseRows } from '../services/fenx2Parser'
 
 export default function ImportFenX2Page(){
   const [file, setFile] = useState(null)
@@ -28,31 +29,26 @@ export default function ImportFenX2Page(){
       const first = wb.Sheets[wb.SheetNames[0]]
       rows = XLSX.utils.sheet_to_json(first)
     }
-    // Map rows to mesures
+    // Parse FenX2 rows
+    const parsed = parseRows(rows)
+    // try to match pieces by numUd and create pieces if needed
     const pieces = await getPiecesByChantier(chantierId)
-    const mesures = []
-    for (const r of rows){
-      const m = {
-        chantierId: Number(chantierId),
-        pieceId: null,
-        num: r.num || r.NUM || r.Num || '',
-        numUd: r.numUd || r.num_ud || r.numUd || '',
-        Pb: r.Pb || r.Pb || r.Pb || '',
-        precision: r.précision || r.precision || r.precise || '',
-        date: r.date || '',
-        livetime: r.livetime || r.livetime || ''
+    for (const p of parsed){
+      p.chantierId = Number(chantierId)
+      // match piece by numUd
+      let piece = null
+      if (p.numUd) piece = pieces.find(x=> x.numUd && String(x.numUd) === String(p.numUd))
+      if (!piece && p.numUd){
+        const id = await addPiece({chantierId:Number(chantierId), name:`UD ${p.numUd}`, numUd: String(p.numUd)})
+        piece = {id, numUd: p.numUd}
+        pieces.push(piece)
       }
-      // try to find piece by numUd
-      let piece = pieces.find(p=> p.numUd && String(p.numUd) === String(m.numUd))
-      if (!piece && m.numUd){
-        const id = await addPiece({chantierId:Number(chantierId), name:`UD ${m.numUd}`, numUd: String(m.numUd)})
-        piece = {id, numUd: m.numUd}
-      }
-      if (piece) m.pieceId = piece.id
-      mesures.push(m)
+      if (piece) p.pieceId = piece.id
+      // map fields to DB schema
+      p.num = p.num || ''
     }
-    if (mesures.length) await addMesures(mesures)
-    alert(`Importé ${mesures.length} mesures`) 
+    if (parsed.length) await addMesures(parsed)
+    alert(`Importé ${parsed.length} mesures`)
   }
 
   return (

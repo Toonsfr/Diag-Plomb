@@ -15,7 +15,13 @@ export const updatePiece = async (id, changes) => db.pieces.update(Number(id), c
 export const deletePiece = async (id) => db.pieces.delete(Number(id))
 
 export const addMesures = async (mesArray) => db.mesures.bulkAdd(mesArray)
-export const getMesuresByChantier = async (chantierId) => db.mesures.where('chantierId').equals(Number(chantierId)).toArray()
+export const getMesuresByChantier = async (chantierId) => db.mesures.where('chantierId').equals(Number(chantierId)).sortBy('num')
+export const getMesure = async (id) => db.mesures.get(Number(id))
+export const updateMesure = async (id, changes) => db.mesures.update(Number(id), changes)
+export const bulkUpdateMesures = async (items) => {
+  // items: [{id, changes}]
+  return Promise.all(items.map(it => updateMesure(it.id, it.changes)))
+}
 
 export const clearAll = async () => {
   await db.chantiers.clear(); await db.pieces.clear(); await db.mesures.clear();
