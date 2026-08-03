@@ -316,6 +316,77 @@ export const importChantierJSONFromFile = async (file) => {
   })
 }
 
+// Full DB export/import for complete backup & restore
+export const exportFullDB = async () => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  const result = {}
+  const stores = ['chantiers','niveaux','pieces','supports','mesures','planFiles','backups']
+  for (const s of stores){
+    if (tableNames.includes(s)){
+      try{ result[s] = await db[s].toArray() } catch(e){ console.warn('exportFullDB: read failed for', s, e); result[s] = [] }
+    } else result[s] = []
+  }
+  return result
+}
+
+export const exportFullDBDownload = async () => {
+  const obj = await exportFullDB()
+  const text = JSON.stringify(obj, null, 2)
+  const blob = new Blob([text], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `diag-plomb-full-backup_${new Date().toISOString().replace(/[:.]/g,'-')}.json`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  return true
+}
+
+export const importFullDBFromObject = async (obj) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  const stores = ['chantiers','niveaux','pieces','supports','mesures','planFiles','backups']
+  // Use string store names in transaction for older clients
+  const presentStores = stores.filter(s => tableNames.includes(s))
+  if (presentStores.length === 0) throw new Error('No compatible stores found in DB')
+  try{
+    await db.transaction('rw', ...presentStores, async ()=>{
+      // clear then bulkPut to preserve ids
+      for (const s of presentStores){
+        try{ await db[s].clear() } catch(e){ console.warn('importFullDB: clear failed', s, e) }
+        const arr = Array.isArray(obj[s]) ? obj[s] : []
+        if (arr.length){
+          try{ await db[s].bulkPut(arr) } catch(e){ console.warn('importFullDB: bulkPut failed for', s, e); // fallback: try individual put
+            for (const it of arr){ try{ await db[s].put(it) } catch(er){ console.warn('importFullDB: put failed for item', it, er) } }
+          }
+        }
+      }
+    })
+  }catch(e){
+    console.error('importFullDB: transaction failed', e)
+    throw e
+  }
+  return true
+}
+
+export const importFullDBFromFile = async (file) => {
+  return new Promise((resolve, reject)=>{
+    const r = new FileReader()
+    r.onload = async (ev)=>{
+      try{
+        const obj = JSON.parse(ev.target.result)
+        await importFullDBFromObject(obj)
+        resolve(true)
+      } catch(err){ reject(err) }
+    }
+    r.onerror = (e)=> reject(e)
+    r.readAsText(file)
+  })
+}
+
 // autosave (silent: save only to IndexedDB backups, no automatic download)
 let _autoSaveTimer = null
 export const startAutoSave = (chantierId, intervalMs = 60000) => {

@@ -9,6 +9,7 @@ import PlanPage from './pages/PlanPage'
 import PlansIndexPage from './pages/PlansIndexPage'
 import OfflinePage from './pages/OfflinePage'
 import BackupPage from './pages/BackupPage'
+import FullBackupPage from './pages/FullBackupPage'
 import Sidebar from './components/Sidebar'
 import './index.css'
 
@@ -29,6 +30,7 @@ export default function App(){
             <Route path="/plans/:chantierId" element={<PlanPage />} />
             <Route path="/offline" element={<OfflinePage />} />
             <Route path="/backup" element={<BackupPage />} />
+            <Route path="/full-backup" element={<FullBackupPage />} />
             <Route path="/export" element={<ExportPage />} />
           </Routes>
         </main>
