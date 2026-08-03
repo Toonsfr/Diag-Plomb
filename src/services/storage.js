@@ -4,13 +4,23 @@ import { parseNumber, classify } from './fenx2Parser'
 // Chantiers
 export const addChantier = async (c) => {
   // create chantier and default niveaux (RDC, R+1, R+2, Sous-sol)
-  return db.transaction('rw', 'chantiers', 'niveaux', async ()=>{
-    const obj = {...c, status: c.status || 'active'}
-    const id = await db.chantiers.add(obj)
-    const defaults = ['RDC','R+1','R+2','Sous-sol']
-    await db.niveaux.bulkAdd(defaults.map(name=> ({ chantierId: id, name })))
-    return id
-  })
+  // Log existing Dexie tables for debugging migration/runtime issues
+  console.log('db tables before addChantier:', db.tables.map(t => t.name))
+  const obj = {...c, status: c.status || 'active'}
+  // Add chantier first; then try to create default niveaux if the store exists
+  const id = await db.chantiers.add(obj)
+  const defaults = ['RDC','R+1','R+2','Sous-sol']
+  try {
+    const tableNames = db.tables.map(t => t.name)
+    if (tableNames.includes('niveaux')) {
+      await db.niveaux.bulkAdd(defaults.map(name=> ({ chantierId: id, name })))
+    } else {
+      console.warn('niveaux store not found in DB; skipping default niveaux creation')
+    }
+  } catch(e){
+    console.warn('adding default niveaux failed', e)
+  }
+  return id
 }
 export const getChantiers = async (opts = { filter: 'active', sortBy: 'date', sortDir: 'desc' }) => {
   // filter: 'all'|'active'|'archived'|'deleted'
@@ -56,12 +66,20 @@ export const searchChantiers = async (q, opts = { filter: 'active' }) => {
 export const addPiece = async (p) => db.pieces.add(p)
 export const addPieceWithSupports = async (p, createSupports = true) => {
   if (!createSupports) return db.pieces.add(p)
-  return db.transaction('rw', 'pieces', 'supports', async ()=>{
-    const id = await db.pieces.add(p)
-    const defaults = ['Mur A','Mur B','Mur C','Mur D','Plafond']
-    await db.supports.bulkAdd(defaults.map(name=> ({ pieceId: id, name })))
-    return id
-  })
+  console.log('db tables before addPieceWithSupports:', db.tables.map(t => t.name))
+  const id = await db.pieces.add(p)
+  const defaults = ['Mur A','Mur B','Mur C','Mur D','Plafond']
+  try {
+    const tableNames = db.tables.map(t => t.name)
+    if (tableNames.includes('supports')) {
+      await db.supports.bulkAdd(defaults.map(name=> ({ pieceId: id, name })))
+    } else {
+      console.warn('supports store not found in DB; skipping default supports creation')
+    }
+  } catch(e){
+    console.warn('adding default supports failed', e)
+  }
+  return id
 }
 export const getPiecesByChantier = async (chantierId) => {
   const arr = await db.pieces.where('chantierId').equals(Number(chantierId)).toArray()
