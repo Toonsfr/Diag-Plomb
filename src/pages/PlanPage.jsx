@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { getChantier, getPlanFilesByChantier, addPlanFile, deletePlanFile } from '../services/storage'
+import { getChantier, getPlanFilesByChantier, addPlanFile, deletePlanFile, getNiveauxByChantier, updatePlanFile } from '../services/storage'
 
 export default function PlanPage(){
   const { chantierId } = useParams()
   const [chantier, setChantier] = useState(null)
   const [plans, setPlans] = useState([])
+  const [niveaux, setNiveaux] = useState([])
+  const [selectedNiveau, setSelectedNiveau] = useState('')
   const [selected, setSelected] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [pos, setPos] = useState({x:0,y:0})
@@ -19,6 +21,8 @@ export default function PlanPage(){
     setChantier(await getChantier(chantierId))
     const pf = await getPlanFilesByChantier(chantierId)
     setPlans(pf || [])
+    const nv = await getNiveauxByChantier(chantierId)
+    setNiveaux(nv || [])
   }
 
   const onFile = async (e)=>{
@@ -27,7 +31,10 @@ export default function PlanPage(){
     const reader = new FileReader()
     reader.onload = async (ev)=>{
       const dataUrl = ev.target.result
-      await addPlanFile({ chantierId: Number(chantierId), name: f.name, type: f.type, dataUrl })
+      const payload = { chantierId: Number(chantierId), name: f.name, type: f.type, dataUrl }
+      if (selectedNiveau) payload.niveauId = Number(selectedNiveau)
+      await addPlanFile(payload)
+      setSelectedNiveau('')
       load()
     }
     reader.readAsDataURL(f)
@@ -86,22 +93,62 @@ export default function PlanPage(){
     <div style={{display:'flex', height: '100%'}}>
       <div style={{width:260, borderRight:'1px solid #ddd', padding:12, boxSizing:'border-box'}}>
         <h3>Plans — {chantier?.name}</h3>
-        <div style={{marginBottom:8}}>
+        <div style={{marginBottom:8, display:'flex', gap:8, alignItems:'center'}}>
+          <select value={selectedNiveau||''} onChange={e=>setSelectedNiveau(e.target.value)}>
+            <option value="">-- Lier à un niveau (optionnel) --</option>
+            {niveaux.map(n=> <option key={n.id} value={n.id}>{n.name}</option>)}
+          </select>
           <input type="file" accept="image/*,application/pdf" onChange={onFile} />
         </div>
+
         <div style={{maxHeight:'70vh', overflowY:'auto'}}>
           <ul style={{padding:0, margin:0, listStyle:'none'}}>
-            {plans.map(p=> (
-              <li key={p.id} style={{padding:8, borderBottom:'1px solid #eee', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <div onClick={()=>openViewer(p)} style={{flex:1}}>
-                  <div style={{fontWeight:600}}>{p.name}</div>
-                  <div style={{fontSize:12, color:'#666'}}>{new Date(p.createdAt).toLocaleString()}</div>
-                </div>
-                <div style={{marginLeft:8}}>
-                  <button onClick={async (ev)=>{ ev.stopPropagation(); if (!confirm('Supprimer ce plan ?')) return; await deletePlanFile(p.id); load() }}>Suppr</button>
-                </div>
+            {niveaux.map(n=> (
+              <li key={n.id} style={{padding:8, borderBottom:'1px solid #eee'}}>
+                <div style={{fontWeight:700}}>{n.name}</div>
+                <ul style={{paddingLeft:12}}>
+                  {plans.filter(p=> p.niveauId === n.id).map(p=> (
+                    <li key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:6}}>
+                      <div style={{cursor:'pointer'}} onClick={()=>openViewer(p)}>
+                        <div style={{fontWeight:600}}>{p.name}</div>
+                        <div style={{fontSize:12, color:'#666'}}>{new Date(p.createdAt).toLocaleString()}</div>
+                      </div>
+                      <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                        <select value={p.niveauId || ''} onChange={async (e)=>{ const v = e.target.value; await updatePlanFile(p.id, { niveauId: v ? Number(v) : null }); load() }}>
+                          <option value="">Sans niveau</option>
+                          {niveaux.map(nn=> <option key={nn.id} value={nn.id}>{nn.name}</option>)}
+                        </select>
+                        <button onClick={async (ev)=>{ ev.stopPropagation(); if (!confirm('Supprimer ce plan ?')) return; await deletePlanFile(p.id); load() }}>Suppr</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
+
+            {plans.filter(p=> !p.niveauId).length > 0 && (
+              <li style={{padding:8, borderTop:'1px solid #eee'}}>
+                <div style={{fontWeight:700}}>Sans niveau</div>
+                <ul style={{paddingLeft:12}}>
+                  {plans.filter(p=> !p.niveauId).map(p=> (
+                    <li key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:6}}>
+                      <div style={{cursor:'pointer'}} onClick={()=>openViewer(p)}>
+                        <div style={{fontWeight:600}}>{p.name}</div>
+                        <div style={{fontSize:12, color:'#666'}}>{new Date(p.createdAt).toLocaleString()}</div>
+                      </div>
+                      <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                        <select value={p.niveauId || ''} onChange={async (e)=>{ const v = e.target.value; await updatePlanFile(p.id, { niveauId: v ? Number(v) : null }); load() }}>
+                          <option value="">Sans niveau</option>
+                          {niveaux.map(nn=> <option key={nn.id} value={nn.id}>{nn.name}</option>)}
+                        </select>
+                        <button onClick={async (ev)=>{ ev.stopPropagation(); if (!confirm('Supprimer ce plan ?')) return; await deletePlanFile(p.id); load() }}>Suppr</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            )}
+
           </ul>
         </div>
       </div>
