@@ -1,8 +1,18 @@
 import { db } from './db'
 import { parseNumber, classify } from './fenx2Parser'
 
+// ensure DB is open before operations; db.open() may be async and callers may execute before migrations complete
+const ensureDBOpen = async () => {
+  try {
+    if (!db.isOpen()) await db.open()
+  } catch (e) {
+    console.warn('ensureDBOpen: db.open failed', e)
+  }
+}
+
 // Chantiers
 export const addChantier = async (c) => {
+  await ensureDBOpen()
   // create chantier and default niveaux (RDC, R+1, R+2, Sous-sol)
   // Log existing Dexie tables for debugging migration/runtime issues
   console.log('db tables before addChantier:', db.tables.map(t => t.name))
@@ -82,6 +92,21 @@ export const addPieceWithSupports = async (p, createSupports = true) => {
   return id
 }
 export const getPiecesByChantier = async (chantierId) => {
+  await ensureDBOpen()
+  // debug: inspect which db table objects exist at runtime
+  console.log({
+    niveaux: db.niveaux,
+    pieces: db.pieces,
+    supports: db.supports,
+    mesures: db.mesures,
+    planFiles: db.planFiles
+  })
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('pieces')) {
+    console.warn('pieces store not found in DB');
+    return []
+  }
+  console.log('before pieces.where', { pieces: db.pieces })
   const arr = await db.pieces.where('chantierId').equals(Number(chantierId)).toArray()
   // sort by niveauId then name
   arr.sort((a,b)=>{
@@ -97,29 +122,57 @@ export const deletePiece = async (id) => db.pieces.delete(Number(id))
 
 // supports
 export const addSupport = async (s) => db.supports.add(s)
-export const getSupportsByPiece = async (pieceId) => db.supports.where('pieceId').equals(Number(pieceId)).toArray()
+export const getSupportsByPiece = async (pieceId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('supports')){
+    console.warn('supports store not found in DB');
+    return []
+  }
+  console.log('before supports.where (getSupportsByPiece)', { supports: db.supports })
+  return db.supports.where('pieceId').equals(Number(pieceId)).toArray()
+}
 export const getSupport = async (id) => db.supports.get(Number(id))
 export const updateSupport = async (id, changes) => db.supports.update(Number(id), changes)
 export const deleteSupport = async (id) => db.supports.delete(Number(id))
 
 // helper: get all supports for a chantier (pieces list required)
 export const getSupportsByChantier = async (chantierId) => {
+  await ensureDBOpen()
   const pieces = await getPiecesByChantier(chantierId)
   const ids = pieces.map(p=> p.id)
   if (ids.length === 0) return []
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('supports')){ console.warn('supports store not found in DB'); return [] }
+  console.log('before supports.where (getSupportsByChantier)', { supports: db.supports, ids })
   return db.supports.where('pieceId').anyOf(ids).toArray()
 }
 
 // niveaux
 export const addNiveau = async (n) => db.niveaux.add(n)
-export const getNiveauxByChantier = async (chantierId) => db.niveaux.where('chantierId').equals(Number(chantierId)).sortBy('name')
+export const getNiveauxByChantier = async (chantierId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('niveaux')){
+    console.warn('niveaux store not found in DB');
+    return []
+  }
+  console.log('before niveaux.where', { niveaux: db.niveaux })
+  return db.niveaux.where('chantierId').equals(Number(chantierId)).sortBy('name')
+}
 export const getNiveau = async (id) => db.niveaux.get(Number(id))
 export const updateNiveau = async (id, changes) => db.niveaux.update(Number(id), changes)
 export const deleteNiveau = async (id) => db.niveaux.delete(Number(id))
 
 // Plan files (images / pdf)
 export const addPlanFile = async (fileObj) => db.planFiles.add({ ...fileObj, createdAt: new Date().toISOString() })
-export const getPlanFilesByChantier = async (chantierId) => db.planFiles.where('chantierId').equals(Number(chantierId)).reverse().sortBy('createdAt')
+export const getPlanFilesByChantier = async (chantierId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('planFiles')){ console.warn('planFiles store not found in DB'); return [] }
+  console.log('before planFiles.where', { planFiles: db.planFiles })
+  return db.planFiles.where('chantierId').equals(Number(chantierId)).reverse().sortBy('createdAt')
+}
 export const deletePlanFile = async (id) => db.planFiles.delete(Number(id))
 export const updatePlanFile = async (id, changes) => db.planFiles.update(Number(id), changes)
 
@@ -128,7 +181,13 @@ export const addBackup = async (chantierId, exportObj) => {
   const payload = { chantierId: Number(chantierId), createdAt: new Date().toISOString(), data: exportObj }
   return db.backups.add(payload)
 }
-export const getBackupsByChantier = async (chantierId) => db.backups.where('chantierId').equals(Number(chantierId)).reverse().sortBy('createdAt')
+export const getBackupsByChantier = async (chantierId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('backups')){ console.warn('backups store not found in DB'); return [] }
+  console.log('before backups.where', { backups: db.backups })
+  return db.backups.where('chantierId').equals(Number(chantierId)).reverse().sortBy('createdAt')
+}
 export const getLastBackup = async (chantierId) => {
   const arr = await getBackupsByChantier(chantierId)
   return (arr && arr.length) ? arr[0] : null
@@ -245,9 +304,21 @@ export const startAutoSave = (chantierId, intervalMs = 60000) => {
 export const stopAutoSave = ()=>{ if (_autoSaveTimer){ clearInterval(_autoSaveTimer); _autoSaveTimer = null } }
 
 // mesures
-export const addMesures = async (mesArray) => db.mesures.bulkAdd(mesArray)
-export const addMesure = async (m) => db.mesures.add(m)
+export const addMesures = async (mesArray) => {
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return }
+  return db.mesures.bulkAdd(mesArray)
+}
+export const addMesure = async (m) => {
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return }
+  return db.mesures.add(m)
+}
 export const getNextMesureNum = async (chantierId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return 1 }
+  console.log('before mesures.where (getNextMesureNum)', { mesures: db.mesures })
   const all = await db.mesures.where('chantierId').equals(Number(chantierId)).toArray()
   let max = 0
   for (const m of all){
@@ -257,6 +328,10 @@ export const getNextMesureNum = async (chantierId) => {
   return max + 1
 }
 export const getMesuresByChantier = async (chantierId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return [] }
+  console.log('before mesures.where (getMesuresByChantier)', { mesures: db.mesures })
   const arr = await db.mesures.where('chantierId').equals(Number(chantierId)).toArray()
   arr.sort((a,b)=>{
     const na = parseFloat(a?.num)
@@ -268,9 +343,21 @@ export const getMesuresByChantier = async (chantierId) => {
   })
   return arr
 }
-export const getMesure = async (id) => db.mesures.get(Number(id))
-export const updateMesure = async (id, changes) => db.mesures.update(Number(id), changes)
-export const deleteMesure = async (id) => db.mesures.delete(Number(id))
+export const getMesure = async (id) => {
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return null }
+  return db.mesures.get(Number(id))
+}
+export const updateMesure = async (id, changes) => {
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return }
+  return db.mesures.update(Number(id), changes)
+}
+export const deleteMesure = async (id) => {
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return }
+  return db.mesures.delete(Number(id))
+}
 export const bulkDeleteMesures = async (ids) => Promise.all(ids.map(id => deleteMesure(id)))
 export const bulkUpdateMesures = async (items) => {
   // items: [{id, changes}]
@@ -278,6 +365,10 @@ export const bulkUpdateMesures = async (items) => {
 }
 
 export const reclassifyMesuresByChantier = async (chantierId) => {
+  await ensureDBOpen()
+  const tableNames = db.tables.map(t => t.name)
+  if (!tableNames.includes('mesures')){ console.warn('mesures store not found in DB'); return }
+  console.log('before mesures.where (reclassifyMesuresByChantier)', { mesures: db.mesures })
   const arr = await db.mesures.where('chantierId').equals(Number(chantierId)).toArray()
   const updates = []
   for (const m of arr){

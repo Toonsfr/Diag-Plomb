@@ -8,3 +8,10 @@ createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
+
+// Register a simple service worker for offline PWA capability (only in production)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW register failed', err))
+  })
+}

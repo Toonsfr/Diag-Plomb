@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getChantiers, addMesures, getPiecesByChantier, addPiece } from '../services/storage'
+import { getChantiers, addMesures, getPiecesByChantier, addPieceWithSupports, reclassifyMesuresByChantier } from '../services/storage'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { parseRows } from '../services/fenx2Parser'
@@ -39,7 +39,9 @@ export default function ImportFenX2Page(){
       let piece = null
       if (p.numUd) piece = pieces.find(x=> x.numUd && String(x.numUd) === String(p.numUd))
       if (!piece && p.numUd){
-        const id = await addPiece({chantierId:Number(chantierId), name:`UD ${p.numUd}`, numUd: String(p.numUd)})
+        const ls = localStorage.getItem('autoCreateSupports')
+        const autoSupports = ls === null ? true : (ls === 'true')
+        const id = await addPieceWithSupports({chantierId:Number(chantierId), name:`UD ${p.numUd}`, numUd: String(p.numUd)}, autoSupports)
         piece = {id, numUd: p.numUd}
         pieces.push(piece)
       }
@@ -47,7 +49,11 @@ export default function ImportFenX2Page(){
       // map fields to DB schema
       p.num = p.num || ''
     }
-    if (parsed.length) await addMesures(parsed)
+    if (parsed.length) {
+      await addMesures(parsed)
+      // reclassify after import
+      try{ await reclassifyMesuresByChantier(Number(chantierId)) }catch(e){ console.error('reclassify error', e) }
+    }
     alert(`Importé ${parsed.length} mesures`)
   }
 

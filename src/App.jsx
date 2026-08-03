@@ -11,6 +11,8 @@ import OfflinePage from './pages/OfflinePage'
 import Sidebar from './components/Sidebar'
 import './index.css'
 
+console.log("APP VERSION V9 TEST")
+
 export default function App(){
   return (
     <BrowserRouter>
