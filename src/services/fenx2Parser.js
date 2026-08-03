@@ -12,7 +12,8 @@ export function parseRows(rows){
     const Pb = parseNumber(PbRaw)
     const precision = precisionRaw ? String(precisionRaw) : ''
     const classe = classify(Pb, precision)
-    mesures.push({ num: num ? String(num) : '', numUd: numUd ? String(numUd) : '', Pb: PbRaw ? String(PbRaw) : '', Pb_value: Pb, precision, date, livetime, classe, pieceId: null })
+    // keep compatibility: add new métier fields with empty defaults
+    mesures.push({ num: num ? String(num) : '', numUd: numUd ? String(numUd) : '', Pb: PbRaw ? String(PbRaw) : '', Pb_value: Pb, precision, date, livetime, classe, pieceId: null, zone:'', element:'', substrat:'', revetement:'', etat:'', degradation:'', hauteur:'', point: '' })
   }
   return mesures
 }
@@ -28,7 +29,7 @@ function extract(obj, keys){
   return undefined
 }
 
-function parseNumber(v){
+export function parseNumber(v){
   if (v === undefined || v === null) return null
   const s = String(v).replace(',', '.').replace(/[^0-9.-]/g, '').trim()
   const n = parseFloat(s)
@@ -50,4 +51,7 @@ export function classify(PbValue, precision){
   return 'Classe 1'
 }
 
-export default { parseRows, classify }
+// Ensure named exports include parseNumber and classify, and default export mirrors them
+export { parseNumber, classify }
+
+export default { parseRows, classify, parseNumber }
