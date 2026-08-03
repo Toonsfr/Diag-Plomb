@@ -4,7 +4,7 @@ import { parseNumber, classify } from './fenx2Parser'
 // Chantiers
 export const addChantier = async (c) => {
   // create chantier and default niveaux (RDC, R+1, R+2, Sous-sol)
-  return db.transaction('rw', db.chantiers, db.niveaux, async ()=>{
+  return db.transaction('rw', 'chantiers', 'niveaux', async ()=>{
     const obj = {...c, status: c.status || 'active'}
     const id = await db.chantiers.add(obj)
     const defaults = ['RDC','R+1','R+2','Sous-sol']
@@ -56,7 +56,7 @@ export const searchChantiers = async (q, opts = { filter: 'active' }) => {
 export const addPiece = async (p) => db.pieces.add(p)
 export const addPieceWithSupports = async (p, createSupports = true) => {
   if (!createSupports) return db.pieces.add(p)
-  return db.transaction('rw', db.pieces, db.supports, async ()=>{
+  return db.transaction('rw', 'pieces', 'supports', async ()=>{
     const id = await db.pieces.add(p)
     const defaults = ['Mur A','Mur B','Mur C','Mur D','Plafond']
     await db.supports.bulkAdd(defaults.map(name=> ({ pieceId: id, name })))
