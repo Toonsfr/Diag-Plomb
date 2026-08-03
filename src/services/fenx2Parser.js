@@ -51,7 +51,5 @@ export function classify(PbValue, precision){
   return 'Classe 1'
 }
 
-// Ensure named exports include parseNumber and classify, and default export mirrors them
-export { parseNumber, classify }
-
+// Default export mirrors the named exports
 export default { parseRows, classify, parseNumber }
