@@ -74,6 +74,18 @@ export default function DashboardPage(){
               {(c.status === 'archived' || c.status === 'deleted') && (
                 <button onClick={async ()=>{ await restoreChantier(c.id); load() }} style={{marginLeft:8}}>♻ Restaurer</button>
               )}
+                            {c.status === 'deleted' && (
+                              <button onClick={async ()=>{
+                                if (!confirm('SUPPRESSION DÉFINITIVE: supprimer ce chantier et toutes ses données ? Cette action est IRRÉVERSIBLE. Confirmer ?')) return
+                                try{
+                                  // import here to avoid circular issues at module load
+                                  const { deleteChantierPermanently } = await import('../services/storage')
+                                  await deleteChantierPermanently(c.id)
+                                  alert('Chantier et données définitivement supprimés')
+                                  load()
+                                }catch(e){ console.error(e); alert('Suppression définitive échouée') }
+                              }} style={{marginLeft:8, color:'red'}}>🗑 Supprimer définitivement</button>
+                            )}
               <button onClick={async ()=>{ try { if (!confirm('Exporter ce chantier en Excel ?')) return; const f = await exportChantier(c.id); alert('Export terminé: '+f) } catch (err){ console.error(err); alert('Export échoué') } }} style={{marginLeft:8}}>📊 Export Excel</button>
             </div>
             {structure[c.id] && (

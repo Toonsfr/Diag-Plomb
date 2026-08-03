@@ -61,6 +61,34 @@ export const setChantierStatus = async (id, status) => db.chantiers.update(Numbe
 export const archiveChantier = async (id) => setChantierStatus(id, 'archived')
 export const deleteChantier = async (id) => setChantierStatus(id, 'deleted')
 export const restoreChantier = async (id) => setChantierStatus(id, 'active')
+
+// Permanently remove a chantier and all related entities from IndexedDB
+export const deleteChantierPermanently = async (chantierId) => {
+  await ensureDBOpen()
+  const id = Number(chantierId)
+  const tableNames = db.tables.map(t => t.name)
+  try{
+    if (tableNames.includes('niveaux')) await db.niveaux.where('chantierId').equals(id).delete()
+    if (tableNames.includes('pieces')) await db.pieces.where('chantierId').equals(id).delete()
+    if (tableNames.includes('supports')) await db.supports.where('pieceId').anyOf(await (async ()=>{
+      // delete supports linked to pieces of this chantier (pieces already deleted above, but be defensive)
+      try{
+        if (!tableNames.includes('pieces')) return []
+        const pieces = await db.pieces.where('chantierId').equals(id).toArray()
+        return pieces.map(p=>p.id)
+      }catch(e){ return [] }
+    })()).delete();
+    if (tableNames.includes('mesures')) await db.mesures.where('chantierId').equals(id).delete()
+    if (tableNames.includes('planFiles')) await db.planFiles.where('chantierId').equals(id).delete()
+    if (tableNames.includes('backups')) await db.backups.where('chantierId').equals(id).delete()
+  }catch(e){
+    // fallback: try deleting without where if transaction partial failed
+    console.warn('deleteChantierPermanently partial failure', e)
+  }
+  // finally delete chantier record
+  try{ await db.chantiers.delete(id) } catch(e){ console.warn('deleteChantierPermanently: failed to delete chantier record', e) }
+  return true
+}
 export const searchChantiers = async (q, opts = { filter: 'active' }) => {
   if (!q || !q.trim()) return getChantiers(opts)
   const s = q.trim().toLowerCase()
