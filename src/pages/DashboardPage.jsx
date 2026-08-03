@@ -10,10 +10,17 @@ export default function DashboardPage(){
   useEffect(()=>{ load() },[filter])
   const load = async()=> setChantiers(await getChantiers({ filter }))
   const create = async ()=>{
-    if (!name) return
-    await addChantier({name, client:'', address:'', date: new Date().toISOString().slice(0,10)})
-    setName('')
-    load()
+    try{
+      console.log("creating chantier", name)
+      if (!name) return
+      await addChantier({name, client:'', address:'', date: new Date().toISOString().slice(0,10)})
+      console.log("chantier créé")
+      setName('')
+      load()
+    }catch(err){
+      console.error(err)
+      throw err
+    }
   }
 
   const [structure, setStructure] = useState({})
