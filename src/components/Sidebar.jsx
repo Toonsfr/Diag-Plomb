@@ -13,6 +13,7 @@ export default function Sidebar(){
         <NavLink to="/import" className={({isActive})=> isActive? 'active':''}>Import FenX2</NavLink>
         <NavLink to="/export" className={({isActive})=> isActive? 'active':''}>Export Excel</NavLink>
         <NavLink to="/plans" className={({isActive})=> isActive? 'active':''}>📐 Plan</NavLink>
+        <NavLink to="/backup" className={({isActive})=> isActive? 'active':''}>📂 Sauvegarde / Mobilité</NavLink>
         <NavLink to="/offline" className={({isActive})=> isActive? 'active':''}>Hors-ligne / Mobilité</NavLink>
       </nav>
       <div className="sidebar-list">
