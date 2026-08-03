@@ -56,6 +56,7 @@ export default function DashboardPage(){
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               <strong>{c.name || `Chantier ${c.id}`}</strong>
               <Link to={`/mesures/${c.id}`}>Mesures</Link>
+              <Link to={`/plans/${c.id}`} style={{marginLeft:8}}>📐 Plan</Link>
               <button onClick={()=>loadStructure(c.id)} style={{marginLeft:8}}>Afficher structure</button>
               {c.status !== 'archived' && c.status !== 'deleted' && (
                 <button onClick={async ()=>{ if (!confirm('Archiver ce chantier ?')) return; await archiveChantier(c.id); load() }} style={{marginLeft:8}}>📦 Archiver</button>

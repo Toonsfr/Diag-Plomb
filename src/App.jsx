@@ -5,6 +5,9 @@ import PiecesPage from './pages/PiecesPage'
 import ImportFenX2Page from './pages/ImportFenX2Page'
 import MesuresPage from './pages/MesuresPage'
 import ExportPage from './pages/ExportPage'
+import PlanPage from './pages/PlanPage'
+import PlansIndexPage from './pages/PlansIndexPage'
+import OfflinePage from './pages/OfflinePage'
 import Sidebar from './components/Sidebar'
 import './index.css'
 
@@ -19,6 +22,9 @@ export default function App(){
             <Route path="/pieces/:chantierId" element={<PiecesPage />} />
             <Route path="/import" element={<ImportFenX2Page />} />
             <Route path="/mesures/:chantierId" element={<MesuresPage />} />
+            <Route path="/plans" element={<PlansIndexPage />} />
+            <Route path="/plans/:chantierId" element={<PlanPage />} />
+            <Route path="/offline" element={<OfflinePage />} />
             <Route path="/export" element={<ExportPage />} />
           </Routes>
         </main>
