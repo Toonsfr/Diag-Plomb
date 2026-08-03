@@ -1,23 +1,44 @@
-import React from 'react'
-import * as XLSX from 'xlsx'
-import { getMesuresByChantier, getChantiers } from '../services/storage'
+import React, { useEffect, useState } from 'react'
+import { exportAllMesures, exportChantier } from '../services/exportExcel'
+import { getChantiers } from '../services/storage'
 
 export default function ExportPage(){
-  const exportAll = async ()=>{
-    const chantiers = await getChantiers()
-    const rows = []
-    for (const c of chantiers){
-      const m = await getMesuresByChantier(c.id)
-      for (const r of m) rows.push({chantier: c.name, ...r})
+  const [chantiers, setChantiers] = useState([])
+  const [mode, setMode] = useState('selected') // 'all' or 'selected'
+  const [selected, setSelected] = useState(null)
+
+  useEffect(()=>{ (async ()=> setChantiers(await getChantiers()))() },[])
+
+  const handleExport = async () => {
+    try {
+      let filename
+      if (mode === 'all') filename = await exportAllMesures()
+      else if (selected) filename = await exportChantier(selected)
+      else { alert('Sélectionner un chantier'); return }
+      console.log('Export completed:', filename)
+      alert('Export terminé: ' + filename)
+    } catch (err) {
+      console.error('Export failed', err)
+      alert('Erreur lors de l\'export. Voir la console pour détails.')
     }
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'mesures')
-    XLSX.writeFile(wb, 'diag-plomb-export.xlsx')
   }
+
   return (
     <div>
       <h2>Export Excel</h2>
-      <button onClick={exportAll}>Exporter tout en XLSX</button>
+      <div>
+        <label><input type="radio" checked={mode==='selected'} onChange={()=>setMode('selected')} /> Chantier sélectionné</label>
+        <label style={{marginLeft:12}}><input type="radio" checked={mode==='all'} onChange={()=>setMode('all')} /> Tous les chantiers</label>
+      </div>
+      <div style={{marginTop:8}}>
+        <select value={selected || ''} onChange={e=>setSelected(e.target.value)}>
+          <option value="">-- Choisir un chantier --</option>
+          {chantiers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div style={{marginTop:12}}>
+        <button onClick={handleExport}>Exporter en XLSX</button>
+      </div>
     </div>
   )
 }
