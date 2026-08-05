@@ -485,7 +485,7 @@ export default function MesuresPage(){
       </div>
 
       <Dialog open={showAdd} onClose={()=>setShowAdd(false)} fullWidth maxWidth="md">
-        <DialogTitle>Nouvelle mesure</DialogTitle>
+        <DialogTitle>Nouvelle mesure — Formulaire terrain v2</DialogTitle>
         <DialogContent>
           <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:8}}>
             <FormControl style={{minWidth:160}}>

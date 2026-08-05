@@ -14,7 +14,7 @@ import Sidebar from './components/Sidebar'
 import SettingsPage from './pages/SettingsPage'
 import './index.css'
 
-console.log("APP VERSION V9 TEST")
+console.log("APP VERSION FORM-MESURES-V2")
 
 export default function App(){
   return (
