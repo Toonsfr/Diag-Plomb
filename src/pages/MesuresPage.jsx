@@ -31,6 +31,8 @@ export default function MesuresPage(){
   const [editingId, setEditingId] = useState(null)
   const [sortBy, setSortBy] = useState('num')
   const [sortDir, setSortDir] = useState('asc')
+  const [quickEditMode, setQuickEditMode] = useState(false)
+  const [inlineEdits, setInlineEdits] = useState({})
   const [visibleColumns, setVisibleColumns] = useState(()=>{
     try{
       const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_visible_columns') : null
@@ -244,6 +246,44 @@ export default function MesuresPage(){
     load()
   }
 
+  const getInlineValue = (m, field) => {
+    const edited = inlineEdits[m.id]
+    if (edited && Object.prototype.hasOwnProperty.call(edited, field)) return edited[field]
+    if (field === 'repere') return m.point || m.zone || ''
+    return m[field] || ''
+  }
+
+  const setInlineValue = (id, field, value) => {
+    setInlineEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }))
+  }
+
+  const saveQuickFields = async (m, partial) => {
+    const changes = { ...partial }
+    const nextPbRaw = Object.prototype.hasOwnProperty.call(changes, 'Pb') ? changes.Pb : m.Pb
+    const nextEtat = m.etat_conservation || m.etat || m.degradation
+    const nextPbValue = parseNumber(nextPbRaw)
+    const nextClasse = getClasseFromValues(nextPbValue, nextEtat)
+    if (Object.prototype.hasOwnProperty.call(changes, 'Pb')) changes.Pb_value = nextPbValue
+    if (Object.prototype.hasOwnProperty.call(changes, 'Pb') || Object.prototype.hasOwnProperty.call(changes, 'precision')) {
+      changes.classe = nextClasse
+      changes.conservationClass = nextClasse
+    }
+    if (Object.prototype.hasOwnProperty.call(changes, 'repere')) {
+      changes.point = changes.repere
+      changes.zone = changes.repere
+      delete changes.repere
+    }
+    await updateMesure(m.id, changes)
+    setMesures(prev => prev.map(x => x.id === m.id ? { ...x, ...changes } : x))
+  }
+
+  const quickPromptEdit = async (m, field, label) => {
+    const current = getInlineValue(m, field)
+    const next = prompt(`${label}`, current)
+    if (next === null) return
+    await saveQuickFields(m, { [field]: next })
+  }
+
   const saveNewMes = async ()=>{
     try{
       if (!chantierId) return alert('Sélectionner un chantier')
@@ -448,7 +488,6 @@ export default function MesuresPage(){
         <DialogTitle>Nouvelle mesure</DialogTitle>
         <DialogContent>
           <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:8}}>
-            <TextField label="Numéro" value={newMes.num||''} onChange={e=>setNewMes({...newMes, num: e.target.value})} />
             <FormControl style={{minWidth:160}}>
               <InputLabel>Pièce</InputLabel>
               <Select value={newMes.pieceId||''} label="Pièce" onChange={e=>{ const val = e.target.value; setNewMes({...newMes, pieceId: val?Number(val):'' , supportId: ''}); }}>
@@ -464,7 +503,7 @@ export default function MesuresPage(){
               </Select>
             </FormControl>
 
-            <TextField label="Point de mesure" value={newMes.point||''} onChange={e=>setNewMes({...newMes, point: e.target.value})} />
+            <TextField label="📍 Repère plan" value={newMes.point||''} onChange={e=>setNewMes({...newMes, point: e.target.value, zone: e.target.value})} />
 
             {/* Main quick fields: Pb, precision, etat de conservation, observations */}
             <TextField label="Pb" value={newMes.Pb||''} onChange={e=>setNewMes({...newMes, Pb: e.target.value})} />
@@ -552,15 +591,6 @@ export default function MesuresPage(){
                   </DialogActions>
                 </Dialog>
                 <FormControl style={{minWidth:160}}>
-                  <InputLabel>Zone</InputLabel>
-                  <Select value={newMes.zone||''} label="Zone" onChange={e=>setNewMes({...newMes, zone: e.target.value})}>
-                    <MenuItem value="">--</MenuItem>
-                    <MenuItem value="Zone 1">Zone 1</MenuItem>
-                    <MenuItem value="Zone 2">Zone 2</MenuItem>
-                    <MenuItem value="Zone 3">Zone 3</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl style={{minWidth:160}}>
                   <InputLabel>Élément</InputLabel>
                   <Select value={newMes.element||''} label="Élément" onChange={e=>{
                     const val = e.target.value
@@ -609,8 +639,6 @@ export default function MesuresPage(){
                   </Select>
                 </FormControl>
                 <TextField label="Hauteur (m)" value={newMes.hauteur||''} onChange={e=>setNewMes({...newMes, hauteur: e.target.value})} />
-                <TextField label="Date" value={newMes.date||''} onChange={e=>setNewMes({...newMes, date: e.target.value})} />
-                <TextField label="Livetime" value={newMes.livetime||''} onChange={e=>setNewMes({...newMes, livetime: e.target.value})} />
               </>
             )}
           </div>
@@ -648,6 +676,7 @@ export default function MesuresPage(){
         <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.date} onChange={()=>toggleVisibleColumn('date')} /> Date</label>
         <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.livetime} onChange={()=>toggleVisibleColumn('livetime')} /> Livetime</label>
         <label style={{marginLeft:12}}><input type="checkbox" checked={!!autoCreateBati} onChange={toggleAutoCreateBati} /> Créer automatiquement le bâti</label>
+        <label style={{marginLeft:12}}><input type="checkbox" checked={!!quickEditMode} onChange={()=>setQuickEditMode(v=>!v)} /> Mode édition rapide</label>
       </div>
 
       <table border={1} cellPadding={6} style={{width:'100%'}}>
@@ -658,6 +687,7 @@ export default function MesuresPage(){
             <th style={{cursor:'pointer'}} onClick={()=>toggleSort('piece')}>Pièce {sortBy==='piece' ? (sortDir==='asc' ? '▲' : '▼') : ''}</th>
             <th>Niveau</th>
             <th>Support</th>
+            <th>Repère plan</th>
             <th style={{cursor:'pointer'}} onClick={()=>toggleSort('Pb')}>Pb {sortBy==='Pb' ? (sortDir==='asc' ? '▲' : '▼') : ''}</th>
             <th>Précision</th>
             {visibleColumns.revetement && <th>Revêtement</th>}
@@ -676,10 +706,49 @@ export default function MesuresPage(){
               <td>{pieces.find(p=> p.id === m.pieceId)?.name || '-'}</td>
               <td>{niveaux.find(n=> n.id === pieces.find(p=> p.id === m.pieceId)?.niveauId)?.name || '-'}</td>
               <td>{(supportsMap[m.pieceId]||[]).find(s=> s.id === m.supportId)?.name || '-'}</td>
-              <td>{m.Pb}</td>
-              <td>{m.precision}</td>
+              <td>
+                {quickEditMode ? (
+                  <input
+                    style={{width:90}}
+                    value={getInlineValue(m, 'repere')}
+                    onChange={e=>setInlineValue(m.id, 'repere', e.target.value)}
+                    onBlur={async ()=>{ await saveQuickFields(m, { repere: getInlineValue(m, 'repere') }) }}
+                  />
+                ) : (m.point || m.zone || '-')}
+              </td>
+              <td>
+                {quickEditMode ? (
+                  <input
+                    style={{width:70}}
+                    value={getInlineValue(m, 'Pb')}
+                    onChange={e=>setInlineValue(m.id, 'Pb', e.target.value)}
+                    onBlur={async ()=>{ await saveQuickFields(m, { Pb: getInlineValue(m, 'Pb') }) }}
+                  />
+                ) : m.Pb}
+              </td>
+              <td>
+                {quickEditMode ? (
+                  <input
+                    style={{width:70}}
+                    value={getInlineValue(m, 'precision')}
+                    onChange={e=>setInlineValue(m.id, 'precision', e.target.value)}
+                    onBlur={async ()=>{ await saveQuickFields(m, { precision: getInlineValue(m, 'precision') }) }}
+                  />
+                ) : m.precision}
+              </td>
               {visibleColumns.revetement && <td>{m.revetement || '-'}</td>}
-              {visibleColumns.hauteur && <td>{m.hauteur || '-'}</td>}
+              {visibleColumns.hauteur && (
+                <td>
+                  {quickEditMode ? (
+                    <input
+                      style={{width:90}}
+                      value={getInlineValue(m, 'hauteur')}
+                      onChange={e=>setInlineValue(m.id, 'hauteur', e.target.value)}
+                      onBlur={async ()=>{ await saveQuickFields(m, { hauteur: getInlineValue(m, 'hauteur') }) }}
+                    />
+                  ) : (m.hauteur || '-')}
+                </td>
+              )}
               {visibleColumns.date && <td>{m.date}</td>}
               {visibleColumns.livetime && <td>{m.livetime}</td>}
               <td>{getClasseFromValues(m.Pb_value, m.etat_conservation || m.etat || m.degradation)}</td>
@@ -694,6 +763,12 @@ export default function MesuresPage(){
                       <option value="">-- Aucun support --</option>
                       {(supportsMap[m.pieceId]||[]).map(s=> <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                  </div>
+                  <div style={{marginTop:8}}>
+                    <button onClick={async ()=>{ await quickPromptEdit(m, 'repere', '📍 Repère plan') }}>📍 Repère</button>
+                    <button onClick={async ()=>{ await quickPromptEdit(m, 'hauteur', '📏 Hauteur') }} style={{marginLeft:8}}>📏 Hauteur</button>
+                    <button onClick={async ()=>{ await quickPromptEdit(m, 'Pb', '🧪 Mesure Pb') }} style={{marginLeft:8}}>🧪 Mesure Pb</button>
+                    <button onClick={async ()=>{ await quickPromptEdit(m, 'precision', '🎯 Précision') }} style={{marginLeft:8}}>🎯 Précision</button>
                   </div>
                   <div style={{marginTop:8}}>
                     <button onClick={async ()=>{
@@ -720,11 +795,6 @@ export default function MesuresPage(){
                       })
                       setShowAdd(true)
                       }}>✏ Modifier</button>
-
-                      <button onClick={async ()=>{
-                      if (!confirm(`Supprimer la mesure ${m.num} ?`)) return
-                      try{ await deleteMesure(m.id); load() } catch(e){ console.error('deleteMesure', e); alert('Erreur suppression') }
-                      }} style={{marginLeft:8}}>🗑 Supprimer</button>
 
                       <button onClick={async ()=>{ await duplicateMesure(m) }} style={{marginLeft:8}}>⎘ Dupliquer</button>
 
