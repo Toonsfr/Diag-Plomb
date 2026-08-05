@@ -37,18 +37,18 @@ export function parseNumber(v){
 }
 
 // Classification rules (configurable):
-// - missing Pb -> Classe 0
-// - Pb < 1 -> Classe 0
+// - missing Pb -> Classe 1
+// - Pb < 1 -> Classe 1
 // - 1 <= Pb < 5 -> Classe 1
 // - 5 <= Pb < 50 -> Classe 2
 // - >=50 -> Classe 3
 export function classify(PbValue, precision){
-  // Simplified classification for V5.1
-  // Pb < 1 => Classe 0
-  // Pb >= 1 => Classe 1
-  if (PbValue === null || PbValue === undefined) return 'Classe 0'
-  if (PbValue < 1) return 'Classe 0'
-  return 'Classe 1'
+  if (PbValue === null || PbValue === undefined) return 'Classe 1'
+  const n = Number(PbValue)
+  if (isNaN(n)) return 'Classe 1'
+  if (n < 5) return 'Classe 1'
+  if (n < 50) return 'Classe 2'
+  return 'Classe 3'
 }
 
 // Default export mirrors the named exports

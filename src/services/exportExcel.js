@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { getChantiers, getMesuresByChantier, getPiecesByChantier, getSupportsByChantier, getNiveauxByChantier } from './storage'
+import { classify, parseNumber } from './fenx2Parser'
 
 export async function exportAllMesures(){
   try {
@@ -47,6 +48,14 @@ async function buildRowsForChantier(chantierId){
   const supportMap = new Map((supports || []).map(s => [s.id, s.name]))
   const niveauMap = new Map((niveaux || []).map(n => [n.id, n.name]))
   const rows = []
+  const normalizeClasse = (m) => {
+    const allowed = ['Classe 1', 'Classe 2', 'Classe 3']
+    const direct = String(m?.classe || '').trim()
+    if (allowed.includes(direct)) return direct
+    const computed = classify(parseNumber(m?.Pb), m?.precision)
+    if (allowed.includes(computed)) return computed
+    return 'Classe 1'
+  }
   for (const m of mesures){
     const piece = pieces.find(p=> p.id === m.pieceId)
     const niveauName = piece ? (niveauMap.get(piece.niveauId) || '') : ''
@@ -60,7 +69,7 @@ async function buildRowsForChantier(chantierId){
       "Revêtement": m.revetement || '',
       "Etat": m.etat || '',
       "Dégradation": m.degradation || '',
-      "Résultat": (m.classe !== undefined ? m.classe : (Number(m.Pb) < 1 ? 0 : 1)),
+      "Résultat": normalizeClasse(m),
       "Pb": m.Pb,
       "Précision": m.precision,
       "Hauteur": m.hauteur || '',
