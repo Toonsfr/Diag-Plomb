@@ -45,6 +45,14 @@ export default function MesuresPage(){
     })
   }
 
+  // auto-create bâti setting
+  const [autoCreateBati, setAutoCreateBati] = useState(()=>{
+    try{ const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_auto_create_bati') : null; return raw === null ? true : raw === 'true' }catch(e){ return true }
+  })
+  const toggleAutoCreateBati = ()=>{
+    setAutoCreateBati(v=>{ const nv = !v; try{ localStorage.setItem('mesures_auto_create_bati', String(nv)) }catch(e){}; return nv })
+  }
+
   // configurable lists for selects (persisted in localStorage)
   const [elementsList, setElementsList] = useState(()=>{
     try{
@@ -94,10 +102,19 @@ export default function MesuresPage(){
     if (ec) return ec
     const etat = (m.etat||'').toLowerCase()
     const degr = (m.degradation||'').toLowerCase()
-    if (etat === 'non visible' || degr === 'non dégradé' || degr === 'aucune' || degr === 'non degrade' || degr === 'non dégradé') return 'Classe 1'
-    if (etat.includes("etat d'usage") || etat.includes('état dusage') || etat.includes('etat d\'usage') || etat.includes('état d\'usage')) return 'Classe 2'
-    if (degr && degr !== 'aucune' && degr !== 'non dégradé' && degr !== 'non degrade') return 'Classe 3'
+    if (etat === 'non visible' || degr === 'non dégradé' || degr === 'aucune' || degr === 'non degrade' || degr === 'non dégradé') return 'Non visible'
+    if (etat.includes("etat d'usage") || etat.includes('état dusage') || etat.includes('etat d\'usage') || etat.includes('état d\'usage')) return "État d'usage"
+    if (degr && degr !== 'aucune' && degr !== 'non dégradé' && degr !== 'non degrade') return 'Dégradé'
     // default
+    return 'Non visible'
+  }
+
+  const getClasseFromEtat = (etat)=>{
+    if (!etat) return 'Classe 1'
+    const norm = String(etat).trim().toLowerCase()
+    if (norm === 'non visible' || norm === 'non dégradé') return 'Classe 1'
+    if (norm.includes("etat d'usage") || norm.includes("etat dusage") || norm.includes('etat d\'usage') || norm.includes('état d\'usage')) return 'Classe 2'
+    if (norm === 'dégradé' || norm === 'degrade' || norm.includes('dégrad')) return 'Classe 3'
     return 'Classe 1'
   }
 
@@ -111,8 +128,12 @@ export default function MesuresPage(){
       dup.chantierId = Number(chantierId)
       dup.Pb = dup.Pb || ''
       dup.precision = dup.precision || ''
-      // derive conservation class
-      dup.etat_conservation = deriveEtatConservation(dup)
+      // derive etat and class
+      // prefer explicit etat_conservation label if present, otherwise derive from legacy fields
+      dup.etat_conservation = m.etat_conservation || deriveEtatConservation(m)
+      dup.conservationClass = getClasseFromEtat(dup.etat_conservation)
+      // also set classe (Pb class) if available
+      dup.classe = dup.classe || classify(parseNumber(dup.Pb || ''), dup.precision)
       await addMesure(dup)
       load()
       alert('Mesure dupliquée')
@@ -354,12 +375,55 @@ export default function MesuresPage(){
                 <MenuItem value="Dégradé">Dégradé</MenuItem>
               </Select>
             </FormControl>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <div style={{fontSize:12, color:'#444'}}>Classe :</div>
+              <div style={{fontWeight:600}}>{getClasseFromEtat(newMes.etat_conservation || '')}</div>
+            </div>
             <TextField label="Observations" value={newMes.observations||''} onChange={e=>setNewMes({...newMes, observations: e.target.value})} />
 
             <div style={{width:'100%'}}>
               <button onClick={()=>setShowMoreOptions(s=>!s)} style={{marginTop:8}}>{showMoreOptions ? '▲ Moins d\'options' : '▼ Plus d\'options'}</button>
+              <button onClick={()=>{
+                // prefill next num and open dialog for double mesure creation
+                setEditingId(null)
+                try{ getNextMesureNum(chantierId).then(n=> setNewMes(m=> ({ ...m, num: String(n) }))) }catch(e){}
+              }} style={{marginLeft:12}}>⚡ Double mesure</button>
+              <button onClick={async ()=>{
+                // create two mesures now
+                try{
+                  if (!chantierId) return alert('Sélectionner un chantier')
+                  const base = { ...newMes }
+                  // compute two nums
+                  const n1 = await getNextMesureNum(chantierId)
+                  const n2 = await getNextMesureNum(chantierId)
+                  const etat = base.etat_conservation || deriveEtatConservation(base)
+                  const classeEtat = getClasseFromEtat(etat)
+                  const mesCommon = {
+                    chantierId: Number(chantierId),
+                    pieceId: base.pieceId ? Number(base.pieceId) : null,
+                    supportId: base.supportId ? Number(base.supportId) : null,
+                    point: base.point || '',
+                    observations: base.observations || '',
+                    zone: base.zone || '',
+                    element: base.element || '',
+                    substrat: base.substrat || '',
+                    revetement: base.revetement || '',
+                    etat_conservation: etat,
+                    conservationClass: classeEtat,
+                    hauteur: base.hauteur || ''
+                  }
+                  // elements with suffixes
+                  const elBase = (base.element || '').trim()
+                  const el1 = elBase ? `${elBase} - Mesure 1` : ''
+                  const el2 = elBase ? `${elBase} - Mesure 2` : ''
+                  await addMesure({ ...mesCommon, num: String(n1), element: el1 })
+                  await addMesure({ ...mesCommon, num: String(n2), element: el2 })
+                  alert('Deux mesures créées')
+                  setShowAdd(false); setNewMes({}); load()
+                }catch(e){ console.error('double mesure', e); alert('Échec création double mesure') }
+              }} style={{marginLeft:8}}>⚡ Créer les 2 mesures</button>
             </div>
-
+ 
             {showMoreOptions && (
               <>
                 {/* métier dropdowns */}
@@ -455,6 +519,7 @@ export default function MesuresPage(){
         <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.classe} onChange={()=>toggleVisibleColumn('classe')} /> Classe</label>
         <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.date} onChange={()=>toggleVisibleColumn('date')} /> Date</label>
         <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.livetime} onChange={()=>toggleVisibleColumn('livetime')} /> Livetime</label>
+        <label style={{marginLeft:12}}><input type="checkbox" checked={!!autoCreateBati} onChange={toggleAutoCreateBati} /> Créer automatiquement le bâti</label>
       </div>
 
       <table border={1} cellPadding={6} style={{width:'100%'}}>
