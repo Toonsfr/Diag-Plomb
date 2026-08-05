@@ -114,14 +114,7 @@ export default function MesuresPage(){
     return 'Non visible'
   }
 
-  const getClasseFromEtat = (etat)=>{
-    if (!etat) return 'Classe 1'
-    const norm = String(etat).trim().toLowerCase()
-    if (norm === 'non visible' || norm === 'non dégradé') return 'Classe 1'
-    if (norm.includes("etat d'usage") || norm.includes("etat dusage") || norm.includes('etat d\'usage') || norm.includes('état d\'usage')) return 'Classe 2'
-    if (norm === 'dégradé' || norm === 'degrade' || norm.includes('dégrad')) return 'Classe 3'
-    return 'Classe 1'
-  }
+  const getClasseFromValues = (pbValue, etat)=> classify(pbValue, etat)
 
   const duplicateMesure = async (m) =>{
     try{
@@ -135,8 +128,8 @@ export default function MesuresPage(){
       dup.precision = dup.precision || ''
       // derive etat and class
       dup.etat_conservation = m.etat_conservation || deriveEtatConservation(m)
-      dup.conservationClass = getClasseFromEtat(dup.etat_conservation)
-      dup.classe = dup.classe || classify(parseNumber(dup.Pb || ''), dup.precision)
+      dup.conservationClass = getClasseFromValues(parseNumber(dup.Pb || ''), dup.etat_conservation)
+      dup.classe = dup.classe || getClasseFromValues(parseNumber(dup.Pb || ''), dup.etat_conservation)
       
       // Check if element is Porte/Fenêtre/Volet and auto-bâti enabled
       const autoElements = ['Porte','Fenêtre','Volet']
@@ -262,13 +255,10 @@ export default function MesuresPage(){
       }
 
       const Pb_value = parseNumber(newMes.Pb)
-      const classe = classify(Pb_value, newMes.precision)
+      const classe = getClasseFromValues(Pb_value, newMes.etat_conservation)
       const etat_conservation = newMes.etat_conservation || deriveEtatConservation(newMes)
       // derive conservation class mapping
-      let conservationClass = 'Classe 1'
-      if (etat_conservation === 'Non visible' || etat_conservation === 'Non dégradé') conservationClass = 'Classe 1'
-      else if (etat_conservation === "État d'usage") conservationClass = 'Classe 2'
-      else if (etat_conservation === 'Dégradé') conservationClass = 'Classe 3'
+      let conservationClass = getClasseFromValues(Pb_value, etat_conservation)
 
       // Auto-increment named elements
       const autoElements = ['Porte','Fenêtre','Volet']
@@ -431,8 +421,8 @@ export default function MesuresPage(){
       return String(a.Pb||'').localeCompare(String(b.Pb||'')) * dir
     }
     if (sortBy === 'classe'){
-      const ca = String(a.classe || classify(a.Pb_value, a.precision))
-      const cb = String(b.classe || classify(b.Pb_value, b.precision))
+      const ca = String(a.classe || getClasseFromValues(a.Pb_value, a.etat_conservation || a.etat || a.degradation))
+      const cb = String(b.classe || getClasseFromValues(b.Pb_value, b.etat_conservation || b.etat || b.degradation))
       return ca.localeCompare(cb) * dir
     }
     return 0
@@ -490,9 +480,10 @@ export default function MesuresPage(){
                 <MenuItem value="Dégradé">Dégradé</MenuItem>
               </Select>
             </FormControl>
-            <div style={{display:'flex', alignItems:'center', gap:8}}>
-              <div style={{fontSize:12, color:'#444'}}>Classe :</div>
-              <div style={{fontWeight:600}}>{getClasseFromEtat(newMes.etat_conservation || '')}</div>
+            <div style={{display:'grid', gap:4, padding:'6px 0'}}>
+              <div><strong>Pb =</strong> {newMes.Pb || '-'}</div>
+              <div><strong>Etat de conservation =</strong> {newMes.etat_conservation || '-'}</div>
+              <div style={{fontWeight:600}}><strong>Classe calculée =</strong> {getClasseFromValues(parseNumber(newMes.Pb), newMes.etat_conservation || '')}</div>
             </div>
             <TextField label="Observations" value={newMes.observations||''} onChange={e=>setNewMes({...newMes, observations: e.target.value})} />
 
@@ -512,7 +503,7 @@ export default function MesuresPage(){
                   const n1 = await getNextMesureNum(chantierId)
                   const n2 = await getNextMesureNum(chantierId)
                   const etat = base.etat_conservation || deriveEtatConservation(base)
-                  const classeEtat = getClasseFromEtat(etat)
+                  const classeEtat = getClasseFromValues(parseNumber(base.Pb), etat)
                   const mesCommon = {
                     chantierId: Number(chantierId),
                     pieceId: base.pieceId ? Number(base.pieceId) : null,
@@ -691,7 +682,7 @@ export default function MesuresPage(){
               {visibleColumns.hauteur && <td>{m.hauteur || '-'}</td>}
               {visibleColumns.date && <td>{m.date}</td>}
               {visibleColumns.livetime && <td>{m.livetime}</td>}
-              <td>{m.classe || classify(m.Pb_value, m.precision)}</td>
+              <td>{getClasseFromValues(m.Pb_value, m.etat_conservation || m.etat || m.degradation)}</td>
               <td>
                 <div>
                   <select defaultValue={m.pieceId || ''} onChange={(e)=>assignSingle(m.id, e.target.value)}>

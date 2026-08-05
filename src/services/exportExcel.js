@@ -87,10 +87,10 @@ async function buildRowsForChantier(chantierId){
   const niveauMap = new Map((niveaux || []).map(n => [n.id, n.name]))
   const rows = []
   const normalizeClasse = (m) => {
-    const allowed = ['Classe 1', 'Classe 2', 'Classe 3']
+    const allowed = ['Classe 0', 'Classe 1', 'Classe 2', 'Classe 3']
     const direct = String(m?.classe || '').trim()
     if (allowed.includes(direct)) return direct
-    const computed = classify(parseNumber(m?.Pb), m?.precision)
+    const computed = classify(parseNumber(m?.Pb), m?.etat_conservation || m?.etat || m?.degradation)
     if (allowed.includes(computed)) return computed
     return 'Classe 1'
   }
@@ -127,10 +127,10 @@ async function buildLogicielMetierRowsForChantier(chantierId){
   const supportMap = new Map((supports || []).map(s => [s.id, s.name]))
 
   const normalizeClasse = (m) => {
-    const allowed = ['Classe 1', 'Classe 2', 'Classe 3']
+    const allowed = ['Classe 0', 'Classe 1', 'Classe 2', 'Classe 3']
     const direct = String(m?.classe || '').trim()
     if (allowed.includes(direct)) return direct
-    const computed = classify(parseNumber(m?.Pb), m?.precision)
+    const computed = classify(parseNumber(m?.Pb), m?.etat_conservation || m?.etat || m?.degradation)
     if (allowed.includes(computed)) return computed
     return 'Classe 1'
   }

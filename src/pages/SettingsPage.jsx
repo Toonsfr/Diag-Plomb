@@ -4,6 +4,7 @@ import TextField from '@mui/material/TextField'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Switch from '@mui/material/Switch'
 import { getChantiers, reclassifyMesuresByChantier } from '../services/storage'
+import { classify, parseNumber } from '../services/fenx2Parser'
 
 export default function SettingsPage(){
   const [autoCreateBati, setAutoCreateBati] = useState(()=>{
@@ -45,6 +46,17 @@ export default function SettingsPage(){
     }catch(e){ console.warn('reset lists failed', e); alert('Échec') }
   }
 
+  const classTestRows = [
+    { Pb: 0, etat: 'Non Visible' },
+    { Pb: 0, etat: 'Non dégradé' },
+    { Pb: 0, etat: 'Etat d\'usage' },
+    { Pb: 0, etat: 'Dégradé' },
+    { Pb: 1, etat: 'Non Visible' },
+    { Pb: 1, etat: 'Non dégradé' },
+    { Pb: 1, etat: 'Etat d\'usage' },
+    { Pb: 1, etat: 'Dégradé' }
+  ].map(row => ({ ...row, classe: classify(parseNumber(row.Pb), row.etat) }))
+
   return (
     <div>
       <h2>Paramètres</h2>
@@ -52,10 +64,31 @@ export default function SettingsPage(){
         <FormControlLabel control={<Switch checked={autoCreateBati} onChange={toggle} />} label="Créer automatiquement le bâti" />
       </div>
       <div style={{marginBottom:12}}>
-        <Button variant="contained" onClick={runReclassifyAll} disabled={running}>Reclassifier toutes les mesures</Button>
+        <Button variant="contained" onClick={runReclassifyAll} disabled={running}>🔄 Recalculer toutes les classes</Button>
       </div>
       <div style={{marginBottom:12}}>
         <Button onClick={resetLists}>Réinitialiser listes métier par défaut</Button>
+      </div>
+      <div style={{marginBottom:12}}>
+        <h3>Tableau de test du classement</h3>
+        <table border={1} cellPadding={6}>
+          <thead>
+            <tr>
+              <th>Pb</th>
+              <th>Etat de conservation</th>
+              <th>Classe calculée</th>
+            </tr>
+          </thead>
+          <tbody>
+            {classTestRows.map((r, idx) => (
+              <tr key={idx}>
+                <td>{r.Pb}</td>
+                <td>{r.etat}</td>
+                <td>{r.classe}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <pre style={{whiteSpace:'pre-wrap', background:'#f6f6f6', padding:8}}>{log}</pre>
     </div>

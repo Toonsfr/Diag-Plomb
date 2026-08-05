@@ -472,7 +472,7 @@ export const reclassifyMesuresByChantier = async (chantierId) => {
   const updates = []
   for (const m of arr){
     const Pb_value = parseNumber(m.Pb)
-    const classe = classify(Pb_value, m.precision)
+    const classe = classify(Pb_value, m.etat_conservation || m.etat || m.degradation)
     // derive etat_conservation fallback from legacy fields
     const etat = m.etat_conservation || m.etat || ''
     const norm = String(etat).trim().toLowerCase()
