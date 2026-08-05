@@ -48,16 +48,16 @@ function normalizeEtatConservation(etatConservation){
   return etatConservation
 }
 
-// Classification rules (CREP Reperage.xlsx):
-// - Pb <= 0 => Classe 0
-// - Pb > 0 and state in {Non visible, Non dégradé} => Classe 1
-// - Pb > 0 and state = État d'usage => Classe 2
-// - Pb > 0 and state = Dégradé => Classe 3
-// - if state is missing, default to Classe 1 when Pb > 0
+// Classification rules (CREP):
+// - Pb <= 1 mg/cm² => Classe 0
+// - Pb > 1 and state in {Non visible, Non dégradé} => Classe 1
+// - Pb > 1 and state = État d'usage => Classe 2
+// - Pb > 1 and state = Dégradé => Classe 3
+// - if state is missing, default to Classe 1 when Pb > 1
 export function classify(PbValue, etatConservation){
   if (PbValue === null || PbValue === undefined) return 'Classe 0'
   const n = Number(PbValue)
-  if (isNaN(n) || n <= 0) return 'Classe 0'
+  if (isNaN(n) || n <= 1) return 'Classe 0'
   const etat = normalizeEtatConservation(etatConservation)
   if (etat === 'Non visible' || etat === 'Non dégradé' || etat === '') return 'Classe 1'
   if (etat === "État d'usage") return 'Classe 2'

@@ -47,15 +47,13 @@ export default function SettingsPage(){
   }
 
   const classTestRows = [
-    { Pb: 0, etat: 'Non Visible' },
-    { Pb: 0, etat: 'Non dégradé' },
-    { Pb: 0, etat: 'Etat d\'usage' },
-    { Pb: 0, etat: 'Dégradé' },
-    { Pb: 1, etat: 'Non Visible' },
-    { Pb: 1, etat: 'Non dégradé' },
-    { Pb: 1, etat: 'Etat d\'usage' },
-    { Pb: 1, etat: 'Dégradé' }
-  ].map(row => ({ ...row, classe: classify(parseNumber(row.Pb), row.etat) }))
+    { Pb: 0.5, etat: 'Dégradé', attendu: 'Classe 0' },
+    { Pb: 1, etat: 'Dégradé', attendu: 'Classe 0' },
+    { Pb: 1.1, etat: 'Non dégradé', attendu: 'Classe 1' },
+    { Pb: 1.1, etat: 'État d\'usage', attendu: 'Classe 2' },
+    { Pb: 1.1, etat: 'Dégradé', attendu: 'Classe 3' },
+    { Pb: 12, etat: 'Dégradé', attendu: 'Classe 3' }
+  ].map(row => ({ ...row, calcule: classify(parseNumber(row.Pb), row.etat) }))
 
   return (
     <div>
@@ -76,6 +74,7 @@ export default function SettingsPage(){
             <tr>
               <th>Pb</th>
               <th>Etat de conservation</th>
+              <th>Classe attendue</th>
               <th>Classe calculée</th>
             </tr>
           </thead>
@@ -84,7 +83,8 @@ export default function SettingsPage(){
               <tr key={idx}>
                 <td>{r.Pb}</td>
                 <td>{r.etat}</td>
-                <td>{r.classe}</td>
+                <td>{r.attendu}</td>
+                <td>{r.calcule}</td>
               </tr>
             ))}
           </tbody>
