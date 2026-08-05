@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { exportAllMesures, exportChantier } from '../services/exportExcel'
+import { exportAllMesures, exportChantier, exportLogicielMetierAll, exportLogicielMetierChantier } from '../services/exportExcel'
 import { getChantiers } from '../services/storage'
 
 export default function ExportPage(){
@@ -23,6 +23,20 @@ export default function ExportPage(){
     }
   }
 
+  const handleMetierExport = async () => {
+    try {
+      let filename
+      if (mode === 'all') filename = await exportLogicielMetierAll()
+      else if (selected) filename = await exportLogicielMetierChantier(selected)
+      else { alert('Sélectionner un chantier'); return }
+      console.log('Metier export completed:', filename)
+      alert('Export métier terminé: ' + filename)
+    } catch (err) {
+      console.error('Metier export failed', err)
+      alert('Erreur lors de l\'export métier. Voir la console pour détails.')
+    }
+  }
+
   return (
     <div>
       <h2>Export Excel</h2>
@@ -38,6 +52,7 @@ export default function ExportPage(){
       </div>
       <div style={{marginTop:12}}>
         <button onClick={handleExport}>Exporter en XLSX</button>
+        <button onClick={handleMetierExport} style={{marginLeft:12}}>📊 Export logiciel métier</button>
       </div>
     </div>
   )
