@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getMesuresByChantier, getChantier, getPiecesByChantier, updateMesure, bulkUpdateMesures, getSupportsByPiece, addMesure, getNextMesureNum, reclassifyMesuresByChantier, getNiveauxByChantier, deleteMesure, bulkDeleteMesures } from '../services/storage'
+import { getMesuresByChantier, getChantier, getPiecesByChantier, updateMesure, bulkUpdateMesures, getSupportsByPiece, addMesure, getNextMesureNum, reclassifyMesuresByChantier, getNiveauxByChantier, deleteMesure, bulkDeleteMesures, addSupport } from '../services/storage'
 import { classify, parseNumber } from '../services/fenx2Parser'
 
 // MUI
@@ -31,6 +31,60 @@ export default function MesuresPage(){
   const [editingId, setEditingId] = useState(null)
   const [sortBy, setSortBy] = useState('num')
   const [sortDir, setSortDir] = useState('asc')
+  const [visibleColumns, setVisibleColumns] = useState(()=>{
+    try{
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_visible_columns') : null
+      return raw ? JSON.parse(raw) : { revetement:true, hauteur:true, classe:true, date:false, livetime:false }
+    }catch(e){ return { revetement:true, hauteur:true, classe:true, date:false, livetime:false } }
+  })
+  const toggleVisibleColumn = (col)=>{
+    setVisibleColumns(prev => {
+      const next = { ...prev, [col]: !prev[col] }
+      try{ if (typeof window !== 'undefined') localStorage.setItem('mesures_visible_columns', JSON.stringify(next)) }catch(e){}
+      return next
+    })
+  }
+
+  // configurable lists for selects (persisted in localStorage)
+  const [elementsList, setElementsList] = useState(()=>{
+    try{
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_elements') : null
+      return raw ? JSON.parse(raw) : ['Mur','Plafond','Porte','Fenêtre','Volet','Radiateur']
+    }catch(e){ return ['Mur','Plafond','Porte','Fenêtre','Volet','Radiateur'] }
+  })
+  const [revetementsList, setRevetementsList] = useState(()=>{
+    try{ const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_revetements') : null; return raw ? JSON.parse(raw) : ['Peinture','Enduit','Carrelage','PVC'] }catch(e){ return ['Peinture','Enduit','Carrelage','PVC'] }
+  })
+  const [substratsList, setSubstratsList] = useState(()=>{
+    try{ const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_substrats') : null; return raw ? JSON.parse(raw) : ['Béton','Bois','Plâtre','Brique'] }catch(e){ return ['Béton','Bois','Plâtre','Brique'] }
+  })
+  const addToList = (key, value)=>{
+    if (!value || !value.trim()) return
+    const v = value.trim()
+    try{
+      if (key === 'elements'){
+        if (!elementsList.includes(v)){
+          const next = [...elementsList, v]
+          setElementsList(next)
+          localStorage.setItem('mesures_elements', JSON.stringify(next))
+        }
+      }
+      if (key === 'revetements'){
+        if (!revetementsList.includes(v)){
+          const next = [...revetementsList, v]
+          setRevetementsList(next)
+          localStorage.setItem('mesures_revetements', JSON.stringify(next))
+        }
+      }
+      if (key === 'substrats'){
+        if (!substratsList.includes(v)){
+          const next = [...substratsList, v]
+          setSubstratsList(next)
+          localStorage.setItem('mesures_substrats', JSON.stringify(next))
+        }
+      }
+    }catch(e){ console.warn('addToList error', e) }
+  }
 
   useEffect(()=>{ load() },[chantierId])
 
@@ -130,6 +184,7 @@ export default function MesuresPage(){
         const next = await getNextMesureNum(chantierId)
         num = String(next)
       }
+
       const Pb_value = parseNumber(newMes.Pb)
       const classe = classify(Pb_value, newMes.precision)
       const etat_conservation = newMes.etat_conservation || deriveEtatConservation(newMes)
@@ -138,6 +193,23 @@ export default function MesuresPage(){
       if (etat_conservation === 'Non visible' || etat_conservation === 'Non dégradé') conservationClass = 'Classe 1'
       else if (etat_conservation === "État d'usage") conservationClass = 'Classe 2'
       else if (etat_conservation === 'Dégradé') conservationClass = 'Classe 3'
+
+      // Auto-increment named elements and create matching "Bâti X" support when relevant
+      const autoElements = ['Porte','Fenêtre','Volet','Radiateur']
+      let elementFinal = newMes.element || ''
+      const baseMatch = (elementFinal || '').trim().match(/^(\D+?)\s*(\d+)?$/)
+      const baseName = baseMatch ? baseMatch[1].trim() : elementFinal
+      if (autoElements.includes(baseName)){
+        // compute next index based on existing mesures for this chantier
+        const existing = mesures.filter(ms => ms.element && String(ms.element).startsWith(baseName + ' '))
+        let max = 0
+        existing.forEach(ms => {
+          const m = String(ms.element).match(/(\d+)$/)
+          if (m) max = Math.max(max, Number(m[1]))
+        })
+        const nextIndex = max + 1 || 1
+        elementFinal = `${baseName} ${nextIndex}`
+      }
 
       const mesData = {
         chantierId: Number(chantierId),
@@ -153,7 +225,7 @@ export default function MesuresPage(){
         point: newMes.point || '',
         observations: newMes.observations || '',
         zone: newMes.zone || '',
-        element: newMes.element || '',
+        element: elementFinal,
         substrat: newMes.substrat || '',
         revetement: newMes.revetement || '',
         etat_conservation,
@@ -161,6 +233,31 @@ export default function MesuresPage(){
         hauteur: newMes.hauteur || '',
         classe
       }
+
+      // if we generated an element like "Porte N", create or attach a matching "Bâti N" support for the piece
+      if (mesData.pieceId && elementFinal){
+        const m = elementFinal.match(/^(\D+?)\s*(\d+)$/)
+        if (m){
+          const number = m[2]
+          const frameName = `Bâti ${number}`
+          try{
+            const supports = await getSupportsByPiece(mesData.pieceId)
+            const existing = supports.find(s => String(s.name).trim().toLowerCase() === frameName.toLowerCase())
+            if (existing){
+              mesData.supportId = existing.id
+            } else {
+              // create support
+              try{
+                const sid = await addSupport({ pieceId: mesData.pieceId, name: frameName })
+                mesData.supportId = sid
+                // refresh supportsMap for UI
+                setSupportsMap(sm => ({ ...sm, [mesData.pieceId]: [...(sm[mesData.pieceId]||[]), { id: sid, name: frameName }] }))
+              }catch(e){ console.warn('create support failed', e) }
+            }
+          }catch(e){ console.warn('getSupportsByPiece failed', e) }
+        }
+      }
+
       if (editingId) {
         await updateMesure(editingId, mesData)
         alert('Mesure mise à jour')
@@ -277,33 +374,46 @@ export default function MesuresPage(){
                 </FormControl>
                 <FormControl style={{minWidth:160}}>
                   <InputLabel>Élément</InputLabel>
-                  <Select value={newMes.element||''} label="Élément" onChange={e=>setNewMes({...newMes, element: e.target.value})}>
+                  <Select value={newMes.element||''} label="Élément" onChange={e=>{
+                    const val = e.target.value
+                    if (val === '__add__'){
+                      const name = prompt('Ajouter nouvel élément:')
+                      if (name) { addToList('elements', name); setNewMes({...newMes, element: name}) }
+                    } else {
+                      setNewMes({...newMes, element: val})
+                    }
+                  }}>
                     <MenuItem value="">--</MenuItem>
-                    <MenuItem value="Mur">Mur</MenuItem>
-                    <MenuItem value="Plafond">Plafond</MenuItem>
-                    <MenuItem value="Sol">Sol</MenuItem>
-                    <MenuItem value="Fenêtre">Fenêtre</MenuItem>
-                    <MenuItem value="Porte">Porte</MenuItem>
+                    {elementsList.map(el => <MenuItem key={el} value={el}>{el}</MenuItem>)}
+                    <MenuItem value="__add__">➕ Ajouter manuellement</MenuItem>
                   </Select>
                 </FormControl>
                 <FormControl style={{minWidth:160}}>
                   <InputLabel>Substrat</InputLabel>
-                  <Select value={newMes.substrat||''} label="Substrat" onChange={e=>setNewMes({...newMes, substrat: e.target.value})}>
+                  <Select value={newMes.substrat||''} label="Substrat" onChange={e=>{
+                    const val = e.target.value
+                    if (val === '__add__'){
+                      const name = prompt('Ajouter nouveau substrat:')
+                      if (name) { addToList('substrats', name); setNewMes({...newMes, substrat: name}) }
+                    } else setNewMes({...newMes, substrat: val})
+                  }}>
                     <MenuItem value="">--</MenuItem>
-                    <MenuItem value="Béton">Béton</MenuItem>
-                    <MenuItem value="Bois">Bois</MenuItem>
-                    <MenuItem value="Plâtre">Plâtre</MenuItem>
-                    <MenuItem value="Brique">Brique</MenuItem>
+                    {substratsList.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                    <MenuItem value="__add__">➕ Ajouter manuellement</MenuItem>
                   </Select>
                 </FormControl>
                 <FormControl style={{minWidth:160}}>
                   <InputLabel>Revêtement</InputLabel>
-                  <Select value={newMes.revetement||''} label="Revêtement" onChange={e=>setNewMes({...newMes, revetement: e.target.value})}>
+                  <Select value={newMes.revetement||''} label="Revêtement" onChange={e=>{
+                    const val = e.target.value
+                    if (val === '__add__'){
+                      const name = prompt('Ajouter nouveau revêtement:')
+                      if (name) { addToList('revetements', name); setNewMes({...newMes, revetement: name}) }
+                    } else setNewMes({...newMes, revetement: val})
+                  }}>
                     <MenuItem value="">--</MenuItem>
-                    <MenuItem value="Peinture">Peinture</MenuItem>
-                    <MenuItem value="Enduit">Enduit</MenuItem>
-                    <MenuItem value="Carrelage">Carrelage</MenuItem>
-                    <MenuItem value="PVC">PVC</MenuItem>
+                    {revetementsList.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                    <MenuItem value="__add__">➕ Ajouter manuellement</MenuItem>
                   </Select>
                 </FormControl>
                 <TextField label="Hauteur (m)" value={newMes.hauteur||''} onChange={e=>setNewMes({...newMes, hauteur: e.target.value})} />
@@ -338,6 +448,15 @@ export default function MesuresPage(){
         </div>
       </div>
 
+      <div style={{marginBottom:8, border:'1px solid #ddd', padding:8, display:'inline-block'}}>
+        <strong>⚙ Colonnes visibles</strong>
+        <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.revetement} onChange={()=>toggleVisibleColumn('revetement')} /> Revêtement</label>
+        <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.hauteur} onChange={()=>toggleVisibleColumn('hauteur')} /> Hauteur</label>
+        <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.classe} onChange={()=>toggleVisibleColumn('classe')} /> Classe</label>
+        <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.date} onChange={()=>toggleVisibleColumn('date')} /> Date</label>
+        <label style={{marginLeft:8}}><input type="checkbox" checked={!!visibleColumns.livetime} onChange={()=>toggleVisibleColumn('livetime')} /> Livetime</label>
+      </div>
+
       <table border={1} cellPadding={6} style={{width:'100%'}}>
         <thead>
           <tr>
@@ -348,8 +467,10 @@ export default function MesuresPage(){
             <th>Support</th>
             <th style={{cursor:'pointer'}} onClick={()=>toggleSort('Pb')}>Pb {sortBy==='Pb' ? (sortDir==='asc' ? '▲' : '▼') : ''}</th>
             <th>Précision</th>
-            <th>Date</th>
-            <th>Livetime</th>
+            {visibleColumns.revetement && <th>Revêtement</th>}
+            {visibleColumns.hauteur && <th>Hauteur</th>}
+            {visibleColumns.date && <th>Date</th>}
+            {visibleColumns.livetime && <th>Livetime</th>}
             <th style={{cursor:'pointer'}} onClick={()=>toggleSort('classe')}>Classe {sortBy==='classe' ? (sortDir==='asc' ? '▲' : '▼') : ''}</th>
             <th>Action</th>
           </tr>
@@ -364,8 +485,10 @@ export default function MesuresPage(){
               <td>{(supportsMap[m.pieceId]||[]).find(s=> s.id === m.supportId)?.name || '-'}</td>
               <td>{m.Pb}</td>
               <td>{m.precision}</td>
-              <td>{m.date}</td>
-              <td>{m.livetime}</td>
+              {visibleColumns.revetement && <td>{m.revetement || '-'}</td>}
+              {visibleColumns.hauteur && <td>{m.hauteur || '-'}</td>}
+              {visibleColumns.date && <td>{m.date}</td>}
+              {visibleColumns.livetime && <td>{m.livetime}</td>}
               <td>{m.classe || classify(m.Pb_value, m.precision)}</td>
               <td>
                 <div>
