@@ -48,11 +48,14 @@ export default function SettingsPage(){
 
   const classTestRows = [
     { Pb: 0.5, etat: 'Dégradé', attendu: 'Classe 0' },
-    { Pb: 1, etat: 'Dégradé', attendu: 'Classe 0' },
-    { Pb: 1.1, etat: 'Non dégradé', attendu: 'Classe 1' },
-    { Pb: 1.1, etat: 'État d\'usage', attendu: 'Classe 2' },
-    { Pb: 1.1, etat: 'Dégradé', attendu: 'Classe 3' },
-    { Pb: 12, etat: 'Dégradé', attendu: 'Classe 3' }
+    { Pb: 0.99, etat: 'Dégradé', attendu: 'Classe 0' },
+    { Pb: 1, etat: 'Non visible', attendu: 'Classe 1' },
+    { Pb: 1, etat: 'Non dégradé', attendu: 'Classe 1' },
+    { Pb: 1, etat: 'État d\'usage', attendu: 'Classe 2' },
+    { Pb: 1, etat: 'Dégradé', attendu: 'Classe 3' },
+    { Pb: 12, etat: 'Dégradé', attendu: 'Classe 3' },
+    { Pb: 12, etat: 'État d\'usage', attendu: 'Classe 2' },
+    { Pb: 12, etat: 'Non dégradé', attendu: 'Classe 1' }
   ].map(row => ({ ...row, calcule: classify(parseNumber(row.Pb), row.etat) }))
 
   return (

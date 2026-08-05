@@ -140,7 +140,7 @@ async function buildLogicielMetierRowsForChantier(chantierId){
   const classifyCrep = (pb, etat) => {
     const raw = pb === null || pb === undefined || pb === '' ? null : Number(pb)
     if (raw === null || isNaN(raw)) return 'NM'
-    if (raw <= 1) return '0'
+    if (raw < 1) return '0'
     const e = strip(etat)
     if (e === 'non visible' || e === 'non degrade') return '1'
     if (e === 'etat d usage') return '2'

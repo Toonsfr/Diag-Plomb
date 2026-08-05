@@ -22,7 +22,7 @@ export default function ExportPage(){
     ['Mesure', 'Pb'],
     ['Mesure_dlb', 'Pb ou -1 si vide'],
     ['Type_degradation', 'TCRu si mesuré, vide si non mesuré'],
-    ['Classement', 'Pb <= 1 => 0, sinon dépend de etat_conservation (1/2/3), NM si Pb absent'],
+    ['Classement', 'Pb < 1 => 0, sinon dépend de etat_conservation (1/2/3), NM si Pb absent'],
     ['Degradation_du_bati', 'degradation / TCRu si mesuré'],
     ['Raison_non_mesure', 'vide'],
     ['Precision_de_la_mesure', 'precision'],
