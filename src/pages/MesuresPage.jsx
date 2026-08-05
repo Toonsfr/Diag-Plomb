@@ -27,11 +27,43 @@ export default function MesuresPage(){
   const [supportsMap, setSupportsMap] = useState({})
   const [showAdd, setShowAdd] = useState(false)
   const [newMes, setNewMes] = useState({})
+  const [showMoreOptions, setShowMoreOptions] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [sortBy, setSortBy] = useState('num')
   const [sortDir, setSortDir] = useState('asc')
 
   useEffect(()=>{ load() },[chantierId])
+
+  const deriveEtatConservation = (m)=>{
+    // m may have etat and degradation or etat_conservation
+    const ec = m.etat_conservation
+    if (ec) return ec
+    const etat = (m.etat||'').toLowerCase()
+    const degr = (m.degradation||'').toLowerCase()
+    if (etat === 'non visible' || degr === 'non dégradé' || degr === 'aucune' || degr === 'non degrade' || degr === 'non dégradé') return 'Classe 1'
+    if (etat.includes("etat d'usage") || etat.includes('état dusage') || etat.includes('etat d\'usage') || etat.includes('état d\'usage')) return 'Classe 2'
+    if (degr && degr !== 'aucune' && degr !== 'non dégradé' && degr !== 'non degrade') return 'Classe 3'
+    // default
+    return 'Classe 1'
+  }
+
+  const duplicateMesure = async (m) =>{
+    try{
+      const next = await getNextMesureNum(chantierId)
+      const dup = { ...m }
+      delete dup.id
+      dup.num = String(next)
+      // ensure fields are normalized
+      dup.chantierId = Number(chantierId)
+      dup.Pb = dup.Pb || ''
+      dup.precision = dup.precision || ''
+      // derive conservation class
+      dup.etat_conservation = deriveEtatConservation(dup)
+      await addMesure(dup)
+      load()
+      alert('Mesure dupliquée')
+    }catch(e){ console.error('duplicateMesure', e); alert('Duplication échouée') }
+  }
   const load = async ()=>{
     // ensure measures are reclassified before loading to reflect any changes
     if (chantierId) {
@@ -100,6 +132,13 @@ export default function MesuresPage(){
       }
       const Pb_value = parseNumber(newMes.Pb)
       const classe = classify(Pb_value, newMes.precision)
+      const etat_conservation = newMes.etat_conservation || deriveEtatConservation(newMes)
+      // derive conservation class mapping
+      let conservationClass = 'Classe 1'
+      if (etat_conservation === 'Non visible' || etat_conservation === 'Non dégradé') conservationClass = 'Classe 1'
+      else if (etat_conservation === "État d'usage") conservationClass = 'Classe 2'
+      else if (etat_conservation === 'Dégradé') conservationClass = 'Classe 3'
+
       const mesData = {
         chantierId: Number(chantierId),
         pieceId: newMes.pieceId ? Number(newMes.pieceId) : null,
@@ -117,8 +156,8 @@ export default function MesuresPage(){
         element: newMes.element || '',
         substrat: newMes.substrat || '',
         revetement: newMes.revetement || '',
-        etat: newMes.etat || '',
-        degradation: newMes.degradation || '',
+        etat_conservation,
+        conservationClass,
         hauteur: newMes.hauteur || '',
         classe
       }
@@ -204,73 +243,74 @@ export default function MesuresPage(){
 
             <TextField label="Point de mesure" value={newMes.point||''} onChange={e=>setNewMes({...newMes, point: e.target.value})} />
 
-            {/* métier dropdowns */}
-            <FormControl style={{minWidth:160}}>
-              <InputLabel>Zone</InputLabel>
-              <Select value={newMes.zone||''} label="Zone" onChange={e=>setNewMes({...newMes, zone: e.target.value})}>
-                <MenuItem value="">--</MenuItem>
-                <MenuItem value="Zone 1">Zone 1</MenuItem>
-                <MenuItem value="Zone 2">Zone 2</MenuItem>
-                <MenuItem value="Zone 3">Zone 3</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl style={{minWidth:160}}>
-              <InputLabel>Élément</InputLabel>
-              <Select value={newMes.element||''} label="Élément" onChange={e=>setNewMes({...newMes, element: e.target.value})}>
-                <MenuItem value="">--</MenuItem>
-                <MenuItem value="Mur">Mur</MenuItem>
-                <MenuItem value="Plafond">Plafond</MenuItem>
-                <MenuItem value="Sol">Sol</MenuItem>
-                <MenuItem value="Fenêtre">Fenêtre</MenuItem>
-                <MenuItem value="Porte">Porte</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl style={{minWidth:160}}>
-              <InputLabel>Substrat</InputLabel>
-              <Select value={newMes.substrat||''} label="Substrat" onChange={e=>setNewMes({...newMes, substrat: e.target.value})}>
-                <MenuItem value="">--</MenuItem>
-                <MenuItem value="Béton">Béton</MenuItem>
-                <MenuItem value="Bois">Bois</MenuItem>
-                <MenuItem value="Plâtre">Plâtre</MenuItem>
-                <MenuItem value="Brique">Brique</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl style={{minWidth:160}}>
-              <InputLabel>Revêtement</InputLabel>
-              <Select value={newMes.revetement||''} label="Revêtement" onChange={e=>setNewMes({...newMes, revetement: e.target.value})}>
-                <MenuItem value="">--</MenuItem>
-                <MenuItem value="Peinture">Peinture</MenuItem>
-                <MenuItem value="Enduit">Enduit</MenuItem>
-                <MenuItem value="Carrelage">Carrelage</MenuItem>
-                <MenuItem value="PVC">PVC</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl style={{minWidth:160}}>
-              <InputLabel>État</InputLabel>
-              <Select value={newMes.etat||''} label="État" onChange={e=>setNewMes({...newMes, etat: e.target.value})}>
-                <MenuItem value="">--</MenuItem>
-                <MenuItem value="Bon">Bon</MenuItem>
-                <MenuItem value="Moyen">Moyen</MenuItem>
-                <MenuItem value="Mauvais">Mauvais</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl style={{minWidth:160}}>
-              <InputLabel>Dégradation</InputLabel>
-              <Select value={newMes.degradation||''} label="Dégradation" onChange={e=>setNewMes({...newMes, degradation: e.target.value})}>
-                <MenuItem value="">--</MenuItem>
-                <MenuItem value="Aucune">Aucune</MenuItem>
-                <MenuItem value="Faible">Faible</MenuItem>
-                <MenuItem value="Modérée">Modérée</MenuItem>
-                <MenuItem value="Sévère">Sévère</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField label="Hauteur (m)" value={newMes.hauteur||''} onChange={e=>setNewMes({...newMes, hauteur: e.target.value})} />
-
+            {/* Main quick fields: Pb, precision, etat de conservation, observations */}
             <TextField label="Pb" value={newMes.Pb||''} onChange={e=>setNewMes({...newMes, Pb: e.target.value})} />
             <TextField label="Précision" value={newMes.precision||''} onChange={e=>setNewMes({...newMes, precision: e.target.value})} />
-            <TextField label="Date" value={newMes.date||''} onChange={e=>setNewMes({...newMes, date: e.target.value})} />
-            <TextField label="Livetime" value={newMes.livetime||''} onChange={e=>setNewMes({...newMes, livetime: e.target.value})} />
+
+            <FormControl style={{minWidth:220}}>
+              <InputLabel>État de conservation</InputLabel>
+              <Select value={newMes.etat_conservation||''} label="État de conservation" onChange={e=>setNewMes({...newMes, etat_conservation: e.target.value})}>
+                <MenuItem value="">--</MenuItem>
+                <MenuItem value="Non visible">Non visible</MenuItem>
+                <MenuItem value="Non dégradé">Non dégradé</MenuItem>
+                <MenuItem value="État d'usage">État d'usage</MenuItem>
+                <MenuItem value="Dégradé">Dégradé</MenuItem>
+              </Select>
+            </FormControl>
             <TextField label="Observations" value={newMes.observations||''} onChange={e=>setNewMes({...newMes, observations: e.target.value})} />
+
+            <div style={{width:'100%'}}>
+              <button onClick={()=>setShowMoreOptions(s=>!s)} style={{marginTop:8}}>{showMoreOptions ? '▲ Moins d\'options' : '▼ Plus d\'options'}</button>
+            </div>
+
+            {showMoreOptions && (
+              <>
+                {/* métier dropdowns */}
+                <FormControl style={{minWidth:160}}>
+                  <InputLabel>Zone</InputLabel>
+                  <Select value={newMes.zone||''} label="Zone" onChange={e=>setNewMes({...newMes, zone: e.target.value})}>
+                    <MenuItem value="">--</MenuItem>
+                    <MenuItem value="Zone 1">Zone 1</MenuItem>
+                    <MenuItem value="Zone 2">Zone 2</MenuItem>
+                    <MenuItem value="Zone 3">Zone 3</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl style={{minWidth:160}}>
+                  <InputLabel>Élément</InputLabel>
+                  <Select value={newMes.element||''} label="Élément" onChange={e=>setNewMes({...newMes, element: e.target.value})}>
+                    <MenuItem value="">--</MenuItem>
+                    <MenuItem value="Mur">Mur</MenuItem>
+                    <MenuItem value="Plafond">Plafond</MenuItem>
+                    <MenuItem value="Sol">Sol</MenuItem>
+                    <MenuItem value="Fenêtre">Fenêtre</MenuItem>
+                    <MenuItem value="Porte">Porte</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl style={{minWidth:160}}>
+                  <InputLabel>Substrat</InputLabel>
+                  <Select value={newMes.substrat||''} label="Substrat" onChange={e=>setNewMes({...newMes, substrat: e.target.value})}>
+                    <MenuItem value="">--</MenuItem>
+                    <MenuItem value="Béton">Béton</MenuItem>
+                    <MenuItem value="Bois">Bois</MenuItem>
+                    <MenuItem value="Plâtre">Plâtre</MenuItem>
+                    <MenuItem value="Brique">Brique</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl style={{minWidth:160}}>
+                  <InputLabel>Revêtement</InputLabel>
+                  <Select value={newMes.revetement||''} label="Revêtement" onChange={e=>setNewMes({...newMes, revetement: e.target.value})}>
+                    <MenuItem value="">--</MenuItem>
+                    <MenuItem value="Peinture">Peinture</MenuItem>
+                    <MenuItem value="Enduit">Enduit</MenuItem>
+                    <MenuItem value="Carrelage">Carrelage</MenuItem>
+                    <MenuItem value="PVC">PVC</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField label="Hauteur (m)" value={newMes.hauteur||''} onChange={e=>setNewMes({...newMes, hauteur: e.target.value})} />
+                <TextField label="Date" value={newMes.date||''} onChange={e=>setNewMes({...newMes, date: e.target.value})} />
+                <TextField label="Livetime" value={newMes.livetime||''} onChange={e=>setNewMes({...newMes, livetime: e.target.value})} />
+              </>
+            )}
           </div>
         </DialogContent>
         <DialogActions>
@@ -359,12 +399,18 @@ export default function MesuresPage(){
                         element: m.element || '',
                         substrat: m.substrat || '',
                         revetement: m.revetement || '',
-                        etat: m.etat || '',
-                        degradation: m.degradation || '',
+                        etat_conservation: m.etat_conservation || deriveEtatConservation(m),
                         hauteur: m.hauteur || ''
                       })
                       setShowAdd(true)
-                    }}>✏ Modifier</button>
+                      }}>✏ Modifier</button>
+
+                      <button onClick={async ()=>{
+                      if (!confirm(`Supprimer la mesure ${m.num} ?`)) return
+                      try{ await deleteMesure(m.id); load() } catch(e){ console.error('deleteMesure', e); alert('Erreur suppression') }
+                      }} style={{marginLeft:8}}>🗑 Supprimer</button>
+
+                      <button onClick={async ()=>{ await duplicateMesure(m) }} style={{marginLeft:8}}>⎘ Dupliquer</button>
 
                     <button onClick={async ()=>{
                       if (!confirm(`Supprimer la mesure ${m.num} ?`)) return
