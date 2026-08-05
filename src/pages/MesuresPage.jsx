@@ -134,31 +134,64 @@ export default function MesuresPage(){
       dup.Pb = dup.Pb || ''
       dup.precision = dup.precision || ''
       // derive etat and class
-      // prefer explicit etat_conservation label if present, otherwise derive from legacy fields
       dup.etat_conservation = m.etat_conservation || deriveEtatConservation(m)
       dup.conservationClass = getClasseFromEtat(dup.etat_conservation)
-      // also set classe (Pb class) if available
       dup.classe = dup.classe || classify(parseNumber(dup.Pb || ''), dup.precision)
-      // auto-create bati if element has numbering and setting enabled
-      try{
-        const autoCreate = typeof window !== 'undefined' ? (localStorage.getItem('mesures_auto_create_bati') !== 'false') : true
-        if (autoCreate && dup.element){
-          const mMatch = dup.element.match(/^(\D+?)\s*(\d+)$/)
-          if (mMatch && dup.pieceId){
-            const number = mMatch[2]
-            const frameName = `Bâti ${number}`
-            const supports = await getSupportsByPiece(dup.pieceId)
-            const existing = supports.find(s => String(s.name).trim().toLowerCase() === frameName.toLowerCase())
-            if (existing) dup.supportId = existing.id
-            else {
-              try{ const sid = await addSupport({ pieceId: dup.pieceId, name: frameName }); dup.supportId = sid }catch(e){ console.warn('create support failed', e) }
-            }
+      
+      // Check if element is Porte/Fenêtre/Volet and auto-bâti enabled
+      const autoElements = ['Porte','Fenêtre','Volet']
+      const elementBase = (dup.element || '').trim().match(/^(\D+?)\s*(\d+)?$/)
+      const baseName = elementBase ? elementBase[1].trim() : ''
+      
+      if (autoElements.includes(baseName) && autoCreateBati && dup.pieceId){
+        // Create two mesures instead of one
+        const n1 = await getNextMesureNum(chantierId)
+        const n2 = await getNextMesureNum(chantierId)
+        
+        // Get current max index to increment
+        const existing = mesures.filter(ms => ms.element && String(ms.element).startsWith(baseName + ' '))
+        let max = 0
+        existing.forEach(ms => {
+          const mMatch = String(ms.element).match(/(\d+)$/)
+          if (mMatch) max = Math.max(max, Number(mMatch[1]))
+        })
+        const nextIndex = max + 1 || 1
+        
+        const el1Name = `${baseName} ${nextIndex}`
+        const frameNum = nextIndex
+        const frameName = baseName.toLowerCase() === 'porte' ? `Bâti ${frameNum}` : `Bâti ${baseName.toLowerCase()} ${frameNum}`
+        
+        // Create supports
+        let supportId1 = null; let supportId2 = null
+        try{
+          const supports = await getSupportsByPiece(dup.pieceId)
+          
+          let sup1 = supports.find(s => String(s.name).trim().toLowerCase() === el1Name.toLowerCase())
+          if (sup1) supportId1 = sup1.id
+          else {
+            try{ supportId1 = await addSupport({ pieceId: dup.pieceId, name: el1Name }) }catch(e){ console.warn('create support 1 failed', e) }
           }
-        }
-      }catch(e){ console.warn('auto-create bati duplicate failed', e) }
-      await addMesure(dup)
+          
+          let sup2 = supports.find(s => String(s.name).trim().toLowerCase() === frameName.toLowerCase())
+          if (sup2) supportId2 = sup2.id
+          else {
+            try{ supportId2 = await addSupport({ pieceId: dup.pieceId, name: frameName }) }catch(e){ console.warn('create support 2 failed', e) }
+          }
+        }catch(e){ console.warn('getSupportsByPiece duplicate failed', e) }
+        
+        const mes1 = { ...dup, num: String(n1), element: el1Name, supportId: supportId1 }
+        const mes2 = { ...dup, num: String(n2), element: frameName, supportId: supportId2 }
+        
+        await addMesure(mes1)
+        await addMesure(mes2)
+        alert(`Deux mesures dupliquées : ${el1Name} et ${frameName}`)
+      } else {
+        // Single duplicate
+        await addMesure(dup)
+        alert('Mesure dupliquée')
+      }
+      
       load()
-      alert('Mesure dupliquée')
     }catch(e){ console.error('duplicateMesure', e); alert('Duplication échouée') }
   }
   const load = async ()=>{
@@ -237,11 +270,12 @@ export default function MesuresPage(){
       else if (etat_conservation === "État d'usage") conservationClass = 'Classe 2'
       else if (etat_conservation === 'Dégradé') conservationClass = 'Classe 3'
 
-      // Auto-increment named elements and create matching "Bâti X" support when relevant
-      const autoElements = ['Porte','Fenêtre','Volet','Radiateur']
+      // Auto-increment named elements
+      const autoElements = ['Porte','Fenêtre','Volet']
       let elementFinal = newMes.element || ''
       const baseMatch = (elementFinal || '').trim().match(/^(\D+?)\s*(\d+)?$/)
       const baseName = baseMatch ? baseMatch[1].trim() : elementFinal
+      let shouldCreateDualMesure = false
       if (autoElements.includes(baseName)){
         // compute next index based on existing mesures for this chantier
         const existing = mesures.filter(ms => ms.element && String(ms.element).startsWith(baseName + ' '))
@@ -252,62 +286,121 @@ export default function MesuresPage(){
         })
         const nextIndex = max + 1 || 1
         elementFinal = `${baseName} ${nextIndex}`
+        shouldCreateDualMesure = true
       }
 
-      const mesData = {
+      // base mesure data (shared)
+      const mesDataBase = {
         chantierId: Number(chantierId),
         pieceId: newMes.pieceId ? Number(newMes.pieceId) : null,
-        supportId: newMes.supportId ? Number(newMes.supportId) : null,
-        num,
         numUd: newMes.numUd || '',
-        Pb: newMes.Pb ? String(newMes.Pb) : '',
-        Pb_value,
-        precision: newMes.precision || '',
+        // Pb and precision left empty for dual mesures
         date: newMes.date || '',
         livetime: newMes.livetime || '',
         point: newMes.point || '',
         observations: newMes.observations || '',
         zone: newMes.zone || '',
-        element: elementFinal,
         substrat: newMes.substrat || '',
         revetement: newMes.revetement || '',
         etat_conservation,
         conservationClass,
-        hauteur: newMes.hauteur || '',
-        classe
+        hauteur: newMes.hauteur || ''
       }
 
-      // if we generated an element like "Porte N", create or attach a matching "Bâti N" support for the piece
-      if (mesData.pieceId && elementFinal){
-        const m = elementFinal.match(/^(\D+?)\s*(\d+)$/)
-        if (m){
-          const number = m[2]
-          const frameName = `Bâti ${number}`
+      // Handle creation: single or dual
+      if (shouldCreateDualMesure && !editingId && autoCreateBati){
+        // Create TWO mesures: one for the element, one for the frame
+        const n1 = await getNextMesureNum(chantierId)
+        const n2 = await getNextMesureNum(chantierId)
+        
+        // Create supports
+        let supportId1 = null; let supportId2 = null
+        if (mesDataBase.pieceId){
           try{
-            const supports = await getSupportsByPiece(mesData.pieceId)
-            const existing = supports.find(s => String(s.name).trim().toLowerCase() === frameName.toLowerCase())
-            if (existing){
-              mesData.supportId = existing.id
-            } else {
-              // create support
+            const supports = await getSupportsByPiece(mesDataBase.pieceId)
+            // support for element (e.g., "Porte 1")
+            let sup1 = supports.find(s => String(s.name).trim().toLowerCase() === elementFinal.toLowerCase())
+            if (sup1) supportId1 = sup1.id
+            else {
               try{
-                const sid = await addSupport({ pieceId: mesData.pieceId, name: frameName })
-                mesData.supportId = sid
-                // refresh supportsMap for UI
-                setSupportsMap(sm => ({ ...sm, [mesData.pieceId]: [...(sm[mesData.pieceId]||[]), { id: sid, name: frameName }] }))
-              }catch(e){ console.warn('create support failed', e) }
+                supportId1 = await addSupport({ pieceId: mesDataBase.pieceId, name: elementFinal })
+              }catch(e){ console.warn('create support 1 failed', e) }
+            }
+            
+            // support for frame (e.g., "Bâti 1" or "Bâti fenêtre 1")
+            const frameNum = elementFinal.match(/(\d+)$/)? elementFinal.match(/(\d+)$/)[1] : '1'
+            const elementNameLower = baseName.toLowerCase()
+            const frameName = elementNameLower === 'porte' ? `Bâti ${frameNum}` : `Bâti ${elementNameLower} ${frameNum}`
+            
+            let sup2 = supports.find(s => String(s.name).trim().toLowerCase() === frameName.toLowerCase())
+            if (sup2) supportId2 = sup2.id
+            else {
+              try{
+                supportId2 = await addSupport({ pieceId: mesDataBase.pieceId, name: frameName })
+              }catch(e){ console.warn('create support 2 failed', e) }
             }
           }catch(e){ console.warn('getSupportsByPiece failed', e) }
         }
-      }
 
-      if (editingId) {
-        await updateMesure(editingId, mesData)
-        alert('Mesure mise à jour')
+        // Mesure 1: Element
+        const mes1Data = {
+          ...mesDataBase,
+          num: String(n1),
+          Pb: newMes.Pb ? String(newMes.Pb) : '',
+          Pb_value,
+          precision: newMes.precision || '',
+          element: elementFinal,
+          supportId: supportId1,
+          classe
+        }
+        
+        // Mesure 2: Frame (Bâti) - leave Pb and precision empty
+        const frameNum = elementFinal.match(/(\d+)$/)? elementFinal.match(/(\d+)$/)[1] : '1'
+        const frameName = baseName.toLowerCase() === 'porte' ? `Bâti ${frameNum}` : `Bâti ${baseName.toLowerCase()} ${frameNum}`
+        const mes2Data = {
+          ...mesDataBase,
+          num: String(n2),
+          Pb: '', // empty
+          Pb_value: 0,
+          precision: '', // empty
+          element: frameName,
+          supportId: supportId2,
+          classe: 'Classe 1' // default
+        }
+
+        await addMesure(mes1Data)
+        await addMesure(mes2Data)
+        alert(`Deux mesures créées : ${elementFinal} et ${frameName}`)
+        
+        // refresh UI
+        setSupportsMap(sm => {
+          const newMap = { ...sm, [mesDataBase.pieceId]: [...(sm[mesDataBase.pieceId]||[])] }
+          if (supportId1) newMap[mesDataBase.pieceId].push({ id: supportId1, name: elementFinal })
+          if (supportId2) newMap[mesDataBase.pieceId].push({ id: supportId2, name: frameName })
+          return newMap
+        })
       } else {
-        await addMesure(mesData)
-        alert('Mesure ajoutée')
+        // Single mesure creation or edit
+        const mesData = {
+          ...mesDataBase,
+          num,
+          Pb: newMes.Pb ? String(newMes.Pb) : '',
+          Pb_value,
+          precision: newMes.precision || '',
+          element: elementFinal,
+          supportId: newMes.supportId ? Number(newMes.supportId) : null,
+          classe
+        }
+
+        if (editingId) {
+          await updateMesure(editingId, mesData)
+          alert('Mesure mise à jour')
+        } else {
+          await addMesure(mesData)
+          alert('Mesure ajoutée')
+        }
       }
+      
       setShowAdd(false)
       setNewMes({})
       setEditingId(null)
