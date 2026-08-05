@@ -123,64 +123,102 @@ async function buildLogicielMetierRowsForChantier(chantierId){
   const mesures = await getMesuresByChantier(chantierId)
   const pieces = await getPiecesByChantier(chantierId)
   const supports = await getSupportsByChantier(chantierId)
+  const niveaux = await getNiveauxByChantier(chantierId)
   const pieceMap = new Map((pieces || []).map(p => [p.id, p]))
   const supportMap = new Map((supports || []).map(s => [s.id, s.name]))
+  const niveauMap = new Map((niveaux || []).map(n => [n.id, n.name]))
 
-  const normalizeClasse = (m) => {
-    const allowed = ['Classe 0', 'Classe 1', 'Classe 2', 'Classe 3']
-    const direct = String(m?.classe || '').trim()
-    if (allowed.includes(direct)) return direct
-    const computed = classify(parseNumber(m?.Pb), m?.etat_conservation || m?.etat || m?.degradation)
-    if (allowed.includes(computed)) return computed
-    return 'Classe 1'
+  const norm = (v) => String(v || '').trim().toLowerCase()
+  const strip = (v) => norm(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  const formatPiece = (piece) => {
+    if (!piece) return ''
+    const level = niveauMap.get(piece.niveauId) || ''
+    return level ? `${level} - ${piece.name || ''}`.trim() : (piece.name || '')
+  }
+
+  const classifyCrep = (pb, etat) => {
+    const raw = pb === null || pb === undefined || pb === '' ? null : Number(pb)
+    if (raw === null || isNaN(raw)) return 'NM'
+    if (raw <= 0) return '0'
+    const e = strip(etat)
+    if (e === 'non visible' || e === 'non degrade') return '1'
+    if (e === 'etat d usage') return '2'
+    if (e === 'degrade') return '3'
+    return '1'
+  }
+
+  const normalizeNomUD = (element) => {
+    const e = strip(element)
+    if (!e) return ''
+    if (e.startsWith('mur')) return 'Murs'
+    if (e.startsWith('porte')) return 'Huisseries'
+    if (e.startsWith('bati')) return 'Huisseries'
+    if (e.startsWith('fenetre')) return 'Huisseries'
+    if (e.startsWith('volet')) return 'Huisseries'
+    if (e.startsWith('sol')) return 'Sol'
+    if (e.startsWith('plafond')) return 'Plafonds'
+    return ''
+  }
+
+  const normalizePartieMesuree = (element) => {
+    const e = strip(element)
+    if (!e) return ''
+    if (e.startsWith('mur')) return 'Murs'
+    if (e.startsWith('porte')) return 'Porte'
+    if (e.startsWith('bati')) return 'Bâti'
+    if (e.startsWith('fenetre')) return 'Fenêtre'
+    if (e.startsWith('volet')) return 'Volet'
+    return element || ''
   }
 
   const normalizeEtat = (m) => {
-    const allowed = ['Non visible', 'Non dégradé', "État d'usage", 'Dégradé']
-    const direct = String(m?.etat_conservation || '').trim()
-    if (allowed.includes(direct)) return direct
-    if (String(m?.etat || '').trim()) return String(m.etat).trim()
-    if (m?.degradation) return String(m.degradation).trim()
-    return 'Non visible'
+    const e = String(m?.etat_conservation || m?.etat || '').trim()
+    if (!e) return 'Non Visible'
+    const se = strip(e)
+    if (se === 'non visible') return 'Non Visible'
+    if (se === 'non degrade') return 'Non dégradé'
+    if (se === 'etat d usage') return "Etat d'usage"
+    if (se === 'degrade') return 'Dégradé'
+    return e
   }
 
   const rows = []
+  let idx = 0
   for (const m of mesures){
     const piece = pieceMap.get(m.pieceId)
-    const supportName = supportMap.get(m.supportId) || ''
+    const pieceFormatted = formatPiece(piece)
+    const pbRaw = m.Pb === null || m.Pb === undefined ? '' : String(m.Pb)
+    const hasPb = pbRaw !== ''
+    const mesureDlb = hasPb ? pbRaw : '-1'
+    const classe = classifyCrep(m.Pb_value !== undefined ? m.Pb_value : parseNumber(m.Pb), m.etat_conservation || m.etat || m.degradation)
+    const element = String(m.element || '')
+    const hasMeasure = hasPb && String(parseNumber(m.Pb)) !== 'NaN'
     rows.push({
-      'Pièce': piece?.name || '',
-      'Nom UD': m.numUd || '',
-      'Partie mesurée': m.point || m.zone || m.element || '',
-      'Elément': m.element || '',
-      'Support': supportName,
+      'id_classement_champs': String(idx++).padStart(5, '0'),
+      'CelfComposant': `crep-${chantierId}-${m.id || idx}-${Date.now()}`,
+      'Num_mesure': m.num || '',
+      'Piece': pieceFormatted,
+      'Repere_plan': m.zone || m.point || '',
+      'Num_UD': m.numUd || '',
+      'Nom_UD': normalizeNomUD(element),
       'Substrat': m.substrat || '',
-      'Revêtement apparent': m.revetement || '',
+      'Revetement_apparent': m.revetement || '',
       'Hauteur': m.hauteur || '',
-      'Mesure (Pb)': m.Pb || '',
-      'Précision': m.precision || '',
-      'Etat de conservation': normalizeEtat(m),
-      'Classe': normalizeClasse(m),
-      'Observations': m.observations || ''
+      'Mesure': hasMeasure ? pbRaw : '',
+      'Mesure_dlb': mesureDlb,
+      'Type_degradation': hasMeasure ? 'TCRu' : '',
+      'Classement': classe,
+      'Degradation_du_bati': hasMeasure ? (m.degradation || 'TCRu') : '',
+      'Raison_non_mesure': '',
+      'Precision_de_la_mesure': m.precision || '',
+      'Nature_degradation': m.observations || '',
+      'Partie_mesuree': normalizePartieMesuree(element),
+      'PourcentDegradation': '',
+      'EstURTemoin': 'False',
+      'ClefComposantURTemoin': ''
     })
   }
 
-  return rows.map(r => {
-    const ordered = {
-      'Pièce': r['Pièce'],
-      'Nom UD': r['Nom UD'],
-      'Partie mesurée': r['Partie mesurée'],
-      'Elément': r['Elément'],
-      'Support': r['Support'],
-      'Substrat': r['Substrat'],
-      'Revêtement apparent': r['Revêtement apparent'],
-      'Hauteur': r['Hauteur'],
-      'Mesure (Pb)': r['Mesure (Pb)'],
-      'Précision': r['Précision'],
-      'Etat de conservation': r['Etat de conservation'],
-      'Classe': r['Classe'],
-      'Observations': r['Observations']
-    }
-    return ordered
-  })
+  return rows
 }
