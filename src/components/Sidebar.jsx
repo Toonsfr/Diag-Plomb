@@ -16,6 +16,7 @@ export default function Sidebar(){
         <NavLink to="/backup" className={({isActive})=> isActive? 'active':''}>📂 Sauvegarde / Mobilité</NavLink>
         <NavLink to="/full-backup" className={({isActive})=> isActive? 'active':''}>📦 Sauvegarde complète</NavLink>
         <NavLink to="/offline" className={({isActive})=> isActive? 'active':''}>Hors-ligne / Mobilité</NavLink>
+        <NavLink to="/settings" className={({isActive})=> isActive? 'active':''}>⚙ Paramètres</NavLink>
       </nav>
       <div className="sidebar-list">
         <div className="sidebar-subtitle">Chantiers</div>

@@ -60,6 +60,11 @@ export default function MesuresPage(){
       return raw ? JSON.parse(raw) : ['Mur','Plafond','Porte','Fenêtre','Volet','Radiateur']
     }catch(e){ return ['Mur','Plafond','Porte','Fenêtre','Volet','Radiateur'] }
   })
+  const [showListDialog, setShowListDialog] = useState(false)
+  const [listDialogKey, setListDialogKey] = useState('')
+  const [listDialogValue, setListDialogValue] = useState('')
+  const [listDialogField, setListDialogField] = useState('') // which newMes field to set after add
+
   const [revetementsList, setRevetementsList] = useState(()=>{
     try{ const raw = typeof window !== 'undefined' ? localStorage.getItem('mesures_revetements') : null; return raw ? JSON.parse(raw) : ['Peinture','Enduit','Carrelage','PVC'] }catch(e){ return ['Peinture','Enduit','Carrelage','PVC'] }
   })
@@ -134,6 +139,23 @@ export default function MesuresPage(){
       dup.conservationClass = getClasseFromEtat(dup.etat_conservation)
       // also set classe (Pb class) if available
       dup.classe = dup.classe || classify(parseNumber(dup.Pb || ''), dup.precision)
+      // auto-create bati if element has numbering and setting enabled
+      try{
+        const autoCreate = typeof window !== 'undefined' ? (localStorage.getItem('mesures_auto_create_bati') !== 'false') : true
+        if (autoCreate && dup.element){
+          const mMatch = dup.element.match(/^(\D+?)\s*(\d+)$/)
+          if (mMatch && dup.pieceId){
+            const number = mMatch[2]
+            const frameName = `Bâti ${number}`
+            const supports = await getSupportsByPiece(dup.pieceId)
+            const existing = supports.find(s => String(s.name).trim().toLowerCase() === frameName.toLowerCase())
+            if (existing) dup.supportId = existing.id
+            else {
+              try{ const sid = await addSupport({ pieceId: dup.pieceId, name: frameName }); dup.supportId = sid }catch(e){ console.warn('create support failed', e) }
+            }
+          }
+        }
+      }catch(e){ console.warn('auto-create bati duplicate failed', e) }
       await addMesure(dup)
       load()
       alert('Mesure dupliquée')
@@ -427,6 +449,24 @@ export default function MesuresPage(){
             {showMoreOptions && (
               <>
                 {/* métier dropdowns */}
+                <Dialog open={showListDialog} onClose={()=>setShowListDialog(false)}>
+                  <DialogTitle>Ajouter manuellement</DialogTitle>
+                  <DialogContent>
+                    <TextField autoFocus label="Valeur" fullWidth value={listDialogValue} onChange={e=>setListDialogValue(e.target.value)} />
+                  </DialogContent>
+                  <DialogActions>
+                    <Button onClick={()=>setShowListDialog(false)}>Annuler</Button>
+                    <Button onClick={()=>{
+                      // save to proper list
+                      if (listDialogKey === 'elements') addToList('elements', listDialogValue)
+                      if (listDialogKey === 'revetements') addToList('revetements', listDialogValue)
+                      if (listDialogKey === 'substrats') addToList('substrats', listDialogValue)
+                      // set field in newMes
+                      if (listDialogField) setNewMes(n=> ({...n, [listDialogField]: listDialogValue}))
+                      setShowListDialog(false)
+                    }}>Ajouter</Button>
+                  </DialogActions>
+                </Dialog>
                 <FormControl style={{minWidth:160}}>
                   <InputLabel>Zone</InputLabel>
                   <Select value={newMes.zone||''} label="Zone" onChange={e=>setNewMes({...newMes, zone: e.target.value})}>
@@ -441,11 +481,11 @@ export default function MesuresPage(){
                   <Select value={newMes.element||''} label="Élément" onChange={e=>{
                     const val = e.target.value
                     if (val === '__add__'){
-                      const name = prompt('Ajouter nouvel élément:')
-                      if (name) { addToList('elements', name); setNewMes({...newMes, element: name}) }
-                    } else {
-                      setNewMes({...newMes, element: val})
-                    }
+                      setListDialogKey('elements')
+                      setListDialogField('element')
+                      setListDialogValue('')
+                      setShowListDialog(true)
+                    } else setNewMes({...newMes, element: val})
                   }}>
                     <MenuItem value="">--</MenuItem>
                     {elementsList.map(el => <MenuItem key={el} value={el}>{el}</MenuItem>)}
@@ -457,8 +497,10 @@ export default function MesuresPage(){
                   <Select value={newMes.substrat||''} label="Substrat" onChange={e=>{
                     const val = e.target.value
                     if (val === '__add__'){
-                      const name = prompt('Ajouter nouveau substrat:')
-                      if (name) { addToList('substrats', name); setNewMes({...newMes, substrat: name}) }
+                      setListDialogKey('substrats')
+                      setListDialogField('substrat')
+                      setListDialogValue('')
+                      setShowListDialog(true)
                     } else setNewMes({...newMes, substrat: val})
                   }}>
                     <MenuItem value="">--</MenuItem>
@@ -471,8 +513,10 @@ export default function MesuresPage(){
                   <Select value={newMes.revetement||''} label="Revêtement" onChange={e=>{
                     const val = e.target.value
                     if (val === '__add__'){
-                      const name = prompt('Ajouter nouveau revêtement:')
-                      if (name) { addToList('revetements', name); setNewMes({...newMes, revetement: name}) }
+                      setListDialogKey('revetements')
+                      setListDialogField('revetement')
+                      setListDialogValue('')
+                      setShowListDialog(true)
                     } else setNewMes({...newMes, revetement: val})
                   }}>
                     <MenuItem value="">--</MenuItem>

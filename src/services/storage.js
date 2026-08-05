@@ -473,10 +473,20 @@ export const reclassifyMesuresByChantier = async (chantierId) => {
   for (const m of arr){
     const Pb_value = parseNumber(m.Pb)
     const classe = classify(Pb_value, m.precision)
-    // only update if different
-    if (m.Pb_value !== Pb_value || m.classe !== classe){
-      updates.push({ id: m.id, changes: { Pb_value, classe } })
-    }
+    // derive etat_conservation fallback from legacy fields
+    const etat = m.etat_conservation || m.etat || ''
+    const norm = String(etat).trim().toLowerCase()
+    let conservationClass = 'Classe 1'
+    if (norm === 'non visible' || norm === 'non dégradé') conservationClass = 'Classe 1'
+    else if (norm.includes("etat d'usage") || norm.includes('etat dusage') || norm.includes("etat d\'usage") || norm.includes('état d\'usage')) conservationClass = 'Classe 2'
+    else if (norm === 'dégradé' || norm === 'degrade' || norm.includes('dégrad')) conservationClass = 'Classe 3'
+
+    const changes = {}
+    if (m.Pb_value !== Pb_value) changes.Pb_value = Pb_value
+    if (m.classe !== classe) changes.classe = classe
+    if (m.etat_conservation !== etat) changes.etat_conservation = etat
+    if (m.conservationClass !== conservationClass) changes.conservationClass = conservationClass
+    if (Object.keys(changes).length) updates.push({ id: m.id, changes })
   }
   if (updates.length) await bulkUpdateMesures(updates)
   return updates.length

@@ -11,6 +11,7 @@ import OfflinePage from './pages/OfflinePage'
 import BackupPage from './pages/BackupPage'
 import FullBackupPage from './pages/FullBackupPage'
 import Sidebar from './components/Sidebar'
+import SettingsPage from './pages/SettingsPage'
 import './index.css'
 
 console.log("APP VERSION V9 TEST")
@@ -31,6 +32,7 @@ export default function App(){
             <Route path="/offline" element={<OfflinePage />} />
             <Route path="/backup" element={<BackupPage />} />
             <Route path="/full-backup" element={<FullBackupPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/export" element={<ExportPage />} />
           </Routes>
         </main>
