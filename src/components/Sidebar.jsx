@@ -10,7 +10,7 @@ export default function Sidebar(){
       <div className="sidebar-header">Diag Plomb</div>
       <nav>
         <NavLink to="/" end className={({isActive})=> isActive? 'active':''}>Dashboard</NavLink>
-        <NavLink to="/import" className={({isActive})=> isActive? 'active':''}>Import FenX2</NavLink>
+        <NavLink to="/import" className={({isActive})=> isActive? 'active':''}>📥 Import Excel</NavLink>
         <NavLink to="/export" className={({isActive})=> isActive? 'active':''}>Export Excel</NavLink>
         <NavLink to="/plans" className={({isActive})=> isActive? 'active':''}>📐 Plan</NavLink>
         <NavLink to="/backup" className={({isActive})=> isActive? 'active':''}>📂 Sauvegarde / Mobilité</NavLink>
