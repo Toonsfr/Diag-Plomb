@@ -118,6 +118,30 @@ export default function MesuresPage(){
 
   const getClasseFromValues = (pbValue, etat)=> classify(pbValue, etat)
 
+  // Compteur recalculé par pièce (Porte/Fenêtre/Volet ; les Bâtis suivent le même index)
+  const nextElementIndex = (baseName, pieceId)=>{
+    const pid = pieceId ? Number(pieceId) : null
+    const prefix = String(baseName).toLowerCase() + ' '
+    let max = 0
+    mesures.forEach(ms => {
+      if ((ms.pieceId ? Number(ms.pieceId) : null) !== pid) return
+      const el = String(ms.element || '').trim().toLowerCase()
+      if (!el.startsWith(prefix)) return
+      const mMatch = el.match(/(\d+)$/)
+      if (mMatch) max = Math.max(max, Number(mMatch[1]))
+    })
+    return max + 1
+  }
+
+  // Les supports de la pièce choisie dans le formulaire sont toujours rechargés
+  useEffect(()=>{
+    const pid = newMes.pieceId
+    if (!pid) return
+    let cancelled = false
+    getSupportsByPiece(pid).then(list => { if (!cancelled) setSupportsMap(sm => ({ ...sm, [pid]: list })) })
+    return ()=>{ cancelled = true }
+  },[newMes.pieceId, showAdd])
+
   const duplicateMesure = async (m) =>{
     try{
       const next = await getNextMesureNum(chantierId)
@@ -144,13 +168,7 @@ export default function MesuresPage(){
         const n2 = await getNextMesureNum(chantierId)
         
         // Get current max index to increment
-        const existing = mesures.filter(ms => ms.element && String(ms.element).startsWith(baseName + ' '))
-        let max = 0
-        existing.forEach(ms => {
-          const mMatch = String(ms.element).match(/(\d+)$/)
-          if (mMatch) max = Math.max(max, Number(mMatch[1]))
-        })
-        const nextIndex = max + 1 || 1
+        const nextIndex = nextElementIndex(baseName, dup.pieceId)
         
         const el1Name = `${baseName} ${nextIndex}`
         const frameNum = nextIndex
@@ -308,13 +326,7 @@ export default function MesuresPage(){
       let shouldCreateDualMesure = false
       if (autoElements.includes(baseName)){
         // compute next index based on existing mesures for this chantier
-        const existing = mesures.filter(ms => ms.element && String(ms.element).startsWith(baseName + ' '))
-        let max = 0
-        existing.forEach(ms => {
-          const m = String(ms.element).match(/(\d+)$/)
-          if (m) max = Math.max(max, Number(m[1]))
-        })
-        const nextIndex = max + 1 || 1
+        const nextIndex = nextElementIndex(baseName, newMes.pieceId)
         elementFinal = `${baseName} ${nextIndex}`
         shouldCreateDualMesure = true
       }
@@ -754,12 +766,12 @@ export default function MesuresPage(){
               <td>{getClasseFromValues(m.Pb_value, m.etat_conservation || m.etat || m.degradation)}</td>
               <td>
                 <div>
-                  <select defaultValue={m.pieceId || ''} onChange={(e)=>assignSingle(m.id, e.target.value)}>
+                  <select value={m.pieceId || ''} onChange={(e)=>assignSingle(m.id, e.target.value)}>
                     <option value="">-- Aucun --</option>
                     {pieces.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                   <div style={{marginTop:6}}>
-                    <select defaultValue={m.supportId || ''} onChange={(e)=>assignSupport(m.id, e.target.value)}>
+                    <select key={`${m.id}-${m.pieceId || 0}`} value={m.supportId || ''} onChange={(e)=>assignSupport(m.id, e.target.value)}>
                       <option value="">-- Aucun support --</option>
                       {(supportsMap[m.pieceId]||[]).map(s=> <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>

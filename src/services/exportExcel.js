@@ -119,6 +119,29 @@ async function buildRowsForChantier(chantierId){
   return rows
 }
 
+// Mapping métier des niveaux
+export const NIVEAU_METIER_MAP = {
+  'RDC': 'Rez de chaussée',
+  'R+1': '1er étage',
+  'R+2': '2ème étage',
+  'R-1': 'Sous-sol'
+}
+
+export function niveauMetier(name){
+  const raw = String(name || '').trim()
+  if (!raw) return ''
+  const key = raw.toUpperCase().replace(/\s+/g, '')
+  return NIVEAU_METIER_MAP[key] || raw
+}
+
+// L'export reprend tel quel l'état de conservation et la classe de l'application
+export const ETAT_CONSERVATION_MAP = [
+  { app: 'Non visible', export: 'Non visible', classement: 'Classe 1 (Pb ≥ 1) / Classe 0 (Pb < 1)' },
+  { app: 'Non dégradé', export: 'Non dégradé', classement: 'Classe 1 (Pb ≥ 1) / Classe 0 (Pb < 1)' },
+  { app: "État d'usage", export: "État d'usage", classement: 'Classe 2 (Pb ≥ 1) / Classe 0 (Pb < 1)' },
+  { app: 'Dégradé', export: 'Dégradé', classement: 'Classe 3 (Pb ≥ 1) / Classe 0 (Pb < 1)' }
+]
+
 async function buildLogicielMetierRowsForChantier(chantierId){
   const mesures = await getMesuresByChantier(chantierId)
   const pieces = await getPiecesByChantier(chantierId)
@@ -133,19 +156,8 @@ async function buildLogicielMetierRowsForChantier(chantierId){
 
   const formatPiece = (piece) => {
     if (!piece) return ''
-    const level = niveauMap.get(piece.niveauId) || ''
+    const level = niveauMetier(niveauMap.get(piece.niveauId) || '')
     return level ? `${level} - ${piece.name || ''}`.trim() : (piece.name || '')
-  }
-
-  const classifyCrep = (pb, etat) => {
-    const raw = pb === null || pb === undefined || pb === '' ? null : Number(pb)
-    if (raw === null || isNaN(raw)) return 'NM'
-    if (raw < 1) return '0'
-    const e = strip(etat)
-    if (e === 'non visible' || e === 'non degrade') return '1'
-    if (e === 'etat d usage') return '2'
-    if (e === 'degrade') return '3'
-    return '1'
   }
 
   const normalizeNomUD = (element) => {
@@ -172,17 +184,6 @@ async function buildLogicielMetierRowsForChantier(chantierId){
     return element || ''
   }
 
-  const normalizeEtat = (m) => {
-    const e = String(m?.etat_conservation || m?.etat || '').trim()
-    if (!e) return 'Non Visible'
-    const se = strip(e)
-    if (se === 'non visible') return 'Non Visible'
-    if (se === 'non degrade') return 'Non dégradé'
-    if (se === 'etat d usage') return "Etat d'usage"
-    if (se === 'degrade') return 'Dégradé'
-    return e
-  }
-
   const rows = []
   let idx = 0
   for (const m of mesures){
@@ -191,7 +192,9 @@ async function buildLogicielMetierRowsForChantier(chantierId){
     const pbRaw = m.Pb === null || m.Pb === undefined ? '' : String(m.Pb)
     const hasPb = pbRaw !== ''
     const mesureDlb = hasPb ? pbRaw : '-1'
-    const classe = classifyCrep(m.Pb_value !== undefined ? m.Pb_value : parseNumber(m.Pb), m.etat_conservation || m.etat || m.degradation)
+    // Valeurs saisies/affichées dans l'application, sans recalcul
+    const classe = m.classe || m.conservationClass || ''
+    const etatUnite = m.etat_conservation || m.etat || ''
     const element = String(m.element || '')
     const hasMeasure = hasPb && String(parseNumber(m.Pb)) !== 'NaN'
     rows.push({
@@ -207,9 +210,10 @@ async function buildLogicielMetierRowsForChantier(chantierId){
       'Hauteur': m.hauteur || '',
       'Mesure': hasMeasure ? pbRaw : '',
       'Mesure_dlb': mesureDlb,
-      'Type_degradation': hasMeasure ? 'TCRu' : '',
+      'Etat_unite': etatUnite,
+      'Type_degradation': m.degradation || '',
       'Classement': classe,
-      'Degradation_du_bati': hasMeasure ? (m.degradation || 'TCRu') : '',
+      'Degradation_du_bati': m.degradation || '',
       'Raison_non_mesure': '',
       'Precision_de_la_mesure': m.precision || '',
       'Nature_degradation': m.observations || '',

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { exportAllMesures, exportChantier, exportLogicielMetierAll, exportLogicielMetierChantier } from '../services/exportExcel'
+import { exportAllMesures, exportChantier, exportLogicielMetierAll, exportLogicielMetierChantier, ETAT_CONSERVATION_MAP, NIVEAU_METIER_MAP } from '../services/exportExcel'
 import { getChantiers } from '../services/storage'
 
 export default function ExportPage(){
@@ -21,9 +21,10 @@ export default function ExportPage(){
     ['Hauteur', 'hauteur'],
     ['Mesure', 'Pb'],
     ['Mesure_dlb', 'Pb ou -1 si vide'],
-    ['Type_degradation', 'TCRu si mesuré, vide si non mesuré'],
-    ['Classement', 'Pb < 1 => 0, sinon dépend de etat_conservation (1/2/3), NM si Pb absent'],
-    ['Degradation_du_bati', 'degradation / TCRu si mesuré'],
+    ['Type_degradation', 'degradation'],
+    ['Classement', 'classe (valeur stockée, identique à l\'affichage)'],
+    ['Etat_unite', 'etat_conservation (état sélectionné)'],
+    ['Degradation_du_bati', 'degradation'],
     ['Raison_non_mesure', 'vide'],
     ['Precision_de_la_mesure', 'precision'],
     ['Etat de conservation', 'etat_conservation'],
@@ -96,6 +97,29 @@ export default function ExportPage(){
                 <td>{app}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{marginTop:18}}>
+        <h3>Etat de conservation ↔ Export métier</h3>
+        <table border={1} cellPadding={6}>
+          <thead>
+            <tr><th>Application</th><th>Etat_unite exporté</th><th>Classement (valeur de l'application)</th></tr>
+          </thead>
+          <tbody>
+            {ETAT_CONSERVATION_MAP.map(r => (
+              <tr key={r.app}><td>{r.app}</td><td>{r.export}</td><td>{r.classement}</td></tr>
+            ))}
+          </tbody>
+        </table>
+        <p style={{fontSize:12}}>L'export reprend l'état de conservation saisi et la classe stockée par l'application, sans recalcul. Observations → Nature_degradation.</p>
+      </div>
+      <div style={{marginTop:18}}>
+        <h3>Niveaux ↔ Export métier</h3>
+        <table border={1} cellPadding={6}>
+          <thead><tr><th>Application</th><th>Export métier</th></tr></thead>
+          <tbody>
+            {Object.entries(NIVEAU_METIER_MAP).map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}
           </tbody>
         </table>
       </div>
